@@ -352,10 +352,12 @@ class TradingBot:
         """Calculate the Williams Fractals indicator."""
         fractals = pd.Series(index=data.index)
         for i in range(2, len(data) - 2):
-            if data['high'][i] > max(data['high'][i - 2], data['high'][i + 2]) and data['high'][i] > data['high'][i - 1] and data['high'][i] > data['high'][i + 1]:
-                fractals[i] = data['high'][i]  # Bullish fractal
-            elif data['low'][i] < min(data['low'][i - 2], data['low'][i + 2]) and data['low'][i] < data['low'][i - 1] and data['low'][i] < data['low'][i + 1]:
-                fractals[i] = data['low'][i]  # Bearish fractal
+            if data['high'].iloc[i] > max(data['high'].iloc[i - 2], data['high'].iloc[i + 2]) and \
+               data['high'].iloc[i] > data['high'].iloc[i - 1] and data['high'].iloc[i] > data['high'].iloc[i + 1]:
+                fractals.iloc[i] = data['high'].iloc[i]  # Bullish fractal
+            elif data['low'].iloc[i] < min(data['low'].iloc[i - 2], data['low'].iloc[i + 2]) and \
+                 data['low'].iloc[i] < data['low'].iloc[i - 1] and data['low'].iloc[i] < data['low'].iloc[i + 1]:
+                fractals.iloc[i] = data['low'].iloc[i]  # Bearish fractal
         return fractals.dropna()
 
     def calculate_atr(self, data, period=14):
@@ -388,19 +390,18 @@ class TradingBot:
         data['MACD'] = macd
         data['MACD_Signal'] = macd_signal
 
-        # Identify major crossovers
+        # Identify major crossovers using .iloc for position-based indexing
         major_crossovers = []
         for i in range(1, len(data)):
-            if (macd[i - 1] < macd_signal[i - 1] and macd[i] > macd_signal[i]) or \
-               (macd[i - 1] > macd_signal[i - 1] and macd[i] < macd_signal[i]):
-                crossover_value = macd[i]
+            if (macd.iloc[i - 1] < macd_signal.iloc[i - 1] and macd.iloc[i] > macd_signal.iloc[i]) or \
+               (macd.iloc[i - 1] > macd_signal.iloc[i - 1] and macd.iloc[i] < macd_signal.iloc[i]):
+                crossover_value = macd.iloc[i]
                 major_crossovers.append(crossover_value)
 
         # Define overbought and oversold zones based on historical crossovers
         if major_crossovers:
             self.macd_overbought_zone = np.mean(major_crossovers) + np.std(major_crossovers)
             self.macd_oversold_zone = np.mean(major_crossovers) - np.std(major_crossovers)
-
         else:
             self.macd_overbought_zone = None
             self.macd_oversold_zone = None

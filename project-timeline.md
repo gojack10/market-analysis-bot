@@ -19,6 +19,11 @@
 - Created .env file for API token storage
 - Created .gitignore file
 - Modified TradingBot to use environment variables instead of user input for API token
+- Set up GitHub repository at https://github.com/gojack10/market-analysis-bot
+- Created comprehensive README.md with installation and usage instructions
+- Added .gitignore file for Python projects
+- Made initial commit with all project files
+- Successfully pushed code to GitHub repository
 
 ## [2024-03-19]
 - Created comprehensive project-info.md file
@@ -49,3 +54,10 @@
   - Updated .gitignore for secure API key storage
   - Fixed TA-Lib installation requirements
   - Configured environment for API access 
+
+## [2024-01-30]
+### Fixed Pandas Deprecated Indexing Warnings
+- Updated `calculate_macd_zones()` method to use `.iloc` for position-based indexing
+- Updated `calculate_williams_fractals()` method to use `.iloc` for position-based indexing
+- Verified all other pandas indexing practices are using correct methods
+- These changes ensure compatibility with future pandas versions and remove FutureWarning messages 
