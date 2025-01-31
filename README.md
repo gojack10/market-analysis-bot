@@ -127,14 +127,26 @@ if the bot doesn't work:
 
 ## for developers
 
+if you want to modify the python file (MAKE SURE YOU ARE USING THE DEV BRANCH NOT MAIN PLEASE), do so using the GitHub website or if you have git and GitHub set up with your preferred IDE, that works fine too, just push to main as normal and ill review changes
+
+### branching strategy
+we use a simple branching strategy:
+- `main`: production-ready code
+- `dev`: development branch for new features and fixes
+
+to get started with development:
+1. clone the repository
+2. switch to dev branch: `git checkout dev`
+3. make your changes
+4. commit and push to dev branch
+5. create a pull request from dev to main
+
 we've added default environment variables in the dockerfile:
 ```dockerfile
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 ENV ALPHA_VANTAGE_API_KEY="default_value_replace_at_runtime"
 ```
-
-if you want to modify the python file, do so using the GitHub website or if you have git and GitHub set up with your preferred IDE, that works fine too, just push to main as normal and ill review changes
 
 ## clean up docker stuff
 
