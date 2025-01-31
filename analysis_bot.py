@@ -52,21 +52,35 @@ class TradingBot:
         self.rate_limiter = RateLimiter(max_requests=5, time_window=60)
 
     def format_message(self, message):
-        """Format 'bullish' and 'bearish' with appropriate colors."""
-        # Highlight 'bullish' in green
+        """Format 'bullish', 'bearish', 'call', 'calls', 'put', 'puts' with appropriate colors."""
+    # Highlight 'bullish' in green
         message = re.sub(
             r'(bullish)',
             lambda m: colored(m.group(1), 'white', 'on_green', attrs=['bold']),
             message,
             flags=re.IGNORECASE
-        )
-        # Highlight 'bearish' in red
+    )
+    # Highlight 'bearish' in red
         message = re.sub(
             r'(bearish)',
             lambda m: colored(m.group(1), 'white', 'on_red', attrs=['bold']),
             message,
             flags=re.IGNORECASE
-        )
+    )
+    # Highlight 'call' and 'calls' in green
+        message = re.sub(
+            r'\b(calls?)\b',
+            lambda m: colored(m.group(1), 'white', 'on_green', attrs=['bold']),
+            message,
+            flags=re.IGNORECASE
+    )
+    # Highlight 'put' and 'puts' in red
+        message = re.sub(
+            r'\b(puts?)\b',
+            lambda m: colored(m.group(1), 'white', 'on_red', attrs=['bold']),
+            message,
+            flags=re.IGNORECASE
+    )
         return message
 
     def _make_request(self, url, params):
@@ -203,6 +217,30 @@ class TradingBot:
         else:
             return "No trend data available"
 
+    def calculate_adx_dmi(self, data, period=14):
+        """Calculate ADX and DMI indicators."""
+        adx = talib.ADX(data['high'], data['low'], data['close'], timeperiod=period)
+        plus_di = talib.PLUS_DI(data['high'], data['low'], data['close'], timeperiod=period)
+        minus_di = talib.MINUS_DI(data['high'], data['low'], data['close'], timeperiod=period)
+        
+        latest_adx = adx.iloc[-1]
+        latest_plus_di = plus_di.iloc[-1]
+        latest_minus_di = minus_di.iloc[-1]
+        
+        trend_signal = "No strong trend"
+        if latest_adx > 25:
+            if latest_plus_di > latest_minus_di:
+                trend_signal = "Strong Bullish Trend"
+            elif latest_minus_di > latest_plus_di:
+                trend_signal = "Strong Bearish Trend"
+        
+        return {
+            'ADX': latest_adx,
+            'Plus_DI': latest_plus_di,
+            'Minus_DI': latest_minus_di,
+            'Trend Signal': trend_signal
+        }
+
     def calculate_mag7_moving_averages(self, data):
         """
         Mag7-specific moving average strategy optimized for daily charts of
@@ -240,7 +278,54 @@ class TradingBot:
             'reason': reason
         }
 
-    def calculate_fibonacci_retracement(self, data, lookback_period=73*5):
+    def calculate_vwap(self, data):
+        """Calculate Volume Weighted Average Price (VWAP)."""
+        typical_price = (data['high'] + data['low'] + data['close']) / 3
+        cumulative_tpv = (typical_price * data['volume']).cumsum()
+        cumulative_vol = data['volume'].cumsum()
+        vwap = cumulative_tpv / cumulative_vol
+        return vwap
+
+    def calculate_yearly_fibonacci_retracement(self, data, lookback_period=73*5):
+        """Calculate Fibonacci retracement levels based on recent swing points."""
+    
+    # Select recent data within the lookback period
+        recent_data = data.tail(lookback_period)
+    
+    # Find recent swing high and low
+        swing_high = recent_data['high'].max()
+        swing_low = recent_data['low'].min()
+    
+        diff = swing_high - swing_low  # Price range
+    
+    # Determine trend direction (assuming if last close is near high, it's an uptrend)
+        last_close = recent_data['close'].iloc[-1]
+        uptrend = abs(last_close - swing_high) < abs(last_close - swing_low)
+    
+        if uptrend:
+        # Calculate retracement levels from low to high (support levels)
+            levels = {
+                '0.0%': swing_low,
+                '23.6%': swing_low + 0.236 * diff,
+                '38.2%': swing_low + 0.382 * diff,
+                '50.0%': swing_low + 0.5 * diff,
+                '61.8%': swing_low + 0.618 * diff,
+                '100.0%': swing_high
+            }
+        else:
+        # Calculate retracement levels from high to low (resistance levels)
+            levels = {
+                '100.0%': swing_high,
+                '61.8%': swing_high - 0.618 * diff,
+                '50.0%': swing_high - 0.5 * diff,
+                '38.2%': swing_high - 0.382 * diff,
+                '23.6%': swing_high - 0.236 * diff,
+            '   0.0%': swing_low
+            }
+
+        return levels
+
+    def calculate_90days_fibonacci_retracement(self, data, lookback_period=30*3):
         """Calculate Fibonacci retracement levels based on recent swing points."""
     
     # Select recent data within the lookback period
@@ -736,20 +821,30 @@ class TradingBot:
     
     def trade_idea(self, data):
         """Determine a trade idea based on Fibonacci retracement, Bollinger Bands, RSI, MACD, and ATR."""
-        # Calculate Fibonacci retracement levels
-        fib_levels = self.calculate_fibonacci_retracement(data)
+        adx_dmi = self.calculate_adx_dmi(data)
+    
+    # Calculate Fibonacci retracement levels
+        yearly_fib_levels = self.calculate_yearly_fibonacci_retracement(data)
+        fib_levels_90days = self.calculate_90days_fibonacci_retracement(data)
 
-        # Calculate Bollinger Bands
+    # Calculate Bollinger Bands
         upper_band, lower_band = self.calculate_bollinger_bands(data)
 
-        # Calculate Support and Resistance for multiple periods
+    # Calculate Support and Resistance for multiple periods
         support_resistance_levels = self.calculate_support_resistance(data)
 
-        # Calculate MACD zones and trade decision
+    # Calculate MACD zones and trade decision
         self.calculate_macd_zones(data)
         latest_macd = self.macd_trade_decision(data)  # Get the latest MACD value
 
-        # Calculate ATR for stop loss and take profit levels
+        print(f"[LOG] ADX: {adx_dmi['ADX']:.2f}, +DI: {adx_dmi['Plus_DI']:.2f}, -DI: {adx_dmi['Minus_DI']:.2f}")
+
+    # Calculate VWAP and log
+        vwap = self.calculate_vwap(data)
+        current_vwap = vwap.iloc[-1]
+        print(f"[LOG] Current VWAP: {current_vwap:.2f}")
+    
+    # Calculate ATR for stop loss and take profit levels
         atr_levels = self.calculate_atr(data)
         atr = atr_levels["ATR"]
         stop_loss_long = atr_levels["stop_loss_long"]
@@ -760,7 +855,10 @@ class TradingBot:
         print(f"[LOG] Current ATR: {atr}")
 
         print("[LOG] Fibonacci Levels:")
-        for level, price in fib_levels.items():
+        for level, price in yearly_fib_levels.items():
+            print(f"{level}: {price}")
+        print("[LOG] Fibonacci Levels:")
+        for level, price in fib_levels_90days.items():
             print(f"{level}: {price}")
 
         print("[LOG] Bollinger Bands:")
@@ -775,8 +873,8 @@ class TradingBot:
         # Add Mag7 Moving Average analysis
         mag7_analysis = self.calculate_mag7_moving_averages(data)
         if mag7_analysis:
-            print(f"[LOG] Mag7 SMA20: {mag7_analysis['SMA20']:.2f}")
-            print(f"[LOG] Mag7 SMA50: {mag7_analysis['SMA50']:.2f}")
+            print(f"[LOG] SMA20: {mag7_analysis['SMA20']:.2f}")
+            print(f"[LOG] SMA50: {mag7_analysis['SMA50']:.2f}")
 
         # Calculate additional RSI periods
         data['RSI_7'] = talib.RSI(data['close'], timeperiod=7)
@@ -785,14 +883,14 @@ class TradingBot:
         
         latest_rsi_7 = data['RSI_7'].iloc[-1]
         latest_rsi_21 = data['RSI_21'].iloc[-1]
-
+        
         # Log all RSI values clearly
         print("\n[LOG] RSI Levels:")
         print(f"7-period RSI: {data['RSI_7'].iloc[-1]:.2f}")
         print(f"14-period RSI: {data['RSI_14'].iloc[-1]:.2f}")
         print(f"21-period RSI (Market Trend): {data['RSI'].iloc[-1]:.2f}")
 
-        # Collect trade ideas
+    # Collect trade ideas
         trade_ideas = []
         current_price = data['close'].iloc[-1]
         print(f"[LOG] Current Price: {current_price}")
@@ -816,6 +914,12 @@ class TradingBot:
             print(f"[LOG] Annualized Volatility: {annualized_volatility:.4f}")
         else:
             print("[LOG] Not enough data to calculate 30-day historical volatility")
+
+        print(f"[TRADE IDEA] ADX and DMI Trend Analysis: {adx_dmi['Trend Signal']}")
+        if adx_dmi['Trend Signal'] == "Strong Bullish Trend":
+            trade_ideas.append("[TRADE IDEA] Consider long positions as ADX confirms a strong bullish trend.")
+        elif adx_dmi['Trend Signal'] == "Strong Bearish Trend":
+            trade_ideas.append("[TRADE IDEA] Consider short positions as ADX confirms a strong bearish trend.")
 
         # Ichimoku Cloud
         ichimoku = self.ichimoku_cloud(data)
@@ -876,114 +980,151 @@ class TradingBot:
         if roc['signal']:
             trade_ideas.append(f"[TRADE IDEA] Momentum ROC: {roc['signal']} (Value: {roc['roc']:.2f}%)")
 
-        # Bollinger Bands conditions
+    # Get SMA20 and SMA50 values
+        sma20 = data['SMA20'].iloc[-1]
+        sma50 = data['SMA50'].iloc[-1]
+
+    # VWAP-based signals
+        current_price = data['close'].iloc[-1]
+    
+    # Bullish conditions
+        if current_price > current_vwap:
+            trade_ideas.append("[TRADE IDEA] Price above VWAP → Look for bullish pullbacks.")
+        # Check if VWAP is acting as support
+            if data['low'].iloc[-1] <= current_vwap:
+                trade_ideas.append("[TRADE IDEA] VWAP acting as support. Confirm with RSI/MACD.")
+        # Check SMA alignment
+            if current_price > sma20 and current_price > sma50:
+                trade_ideas.append("[TRADE IDEA] Bullish trend confirmed: Price above SMA20 & SMA50.")
+    
+    # Bearish conditions
+        elif current_price < current_vwap:
+            trade_ideas.append("[TRADE IDEA] Price below VWAP → Look for bearish rejections.")
+        # Check if VWAP is acting as resistance
+            if data['high'].iloc[-1] >= current_vwap:
+                trade_ideas.append("[TRADE IDEA] VWAP acting as resistance. Confirm with RSI/MACD.")
+        # Check SMA alignment
+            if current_price < sma20 and current_price < sma50:
+                trade_ideas.append("[TRADE IDEA] Bearish trend confirmed: Price below SMA20 & SMA50.")
+
+
+    # Bollinger Bands conditions
         if current_price > upper_band.iloc[-1]:
-            trade_ideas.append(self.format_message("[TRADE IDEA] Bearish, price above upper Bollinger Band."))
+            trade_ideas.append("[TRADE IDEA] Bearish, price above upper Bollinger Band.")
         elif current_price < lower_band.iloc[-1]:
-            trade_ideas.append(self.format_message("[TRADE IDEA] Bullish, price below lower Bollinger Band."))
+            trade_ideas.append("[TRADE IDEA] Bullish, price below lower Bollinger Band.")
         else:
             print("[TRADE IDEA] Price is within Bollinger Bands. No strong signal.")
 
         if mag7_analysis:
             trade_ideas.append(
-                self.format_message(f"[TRADE IDEA] Mag7 Moving Averages: {mag7_analysis['signal']} - {mag7_analysis['reason']}")
+                f"[TRADE IDEA] Mag7 Moving Averages: {mag7_analysis['signal']} - {mag7_analysis['reason']}"
             )
+    # Fibonacci retracement conditions
+        if current_price > yearly_fib_levels['50.0%']:
+            trade_ideas.append("[TRADE IDEA] Bullish, price above 50% yearly Fibonacci retracement.")
+        if yearly_fib_levels['38.2%'] < current_price <= yearly_fib_levels['50.0%']:
+            trade_ideas.append("[TRADE IDEA] Slightly bullish, price near 38.2% yearly Fibonacci retracement.")
+        if yearly_fib_levels['23.6%'] < current_price <= yearly_fib_levels['38.2%']:
+            trade_ideas.append("[TRADE IDEA] Slightly bearish, price near 23.6% yearly Fibonacci retracement.")
+        if current_price <= yearly_fib_levels['23.6%']:
+            trade_ideas.append("[TRADE IDEA] Bearish, price below 23.6% yearly Fibonacci retracement.")
 
-        # Fibonacci retracement conditions
-        if current_price > fib_levels['50.0%']:
-            trade_ideas.append(self.format_message("[TRADE IDEA] Bullish, price above 50% Fibonacci retracement."))
-        if fib_levels['38.2%'] < current_price <= fib_levels['50.0%']:
-            trade_ideas.append(self.format_message("[TRADE IDEA] Slightly bullish, price near 38.2% Fibonacci retracement."))
-        if fib_levels['23.6%'] < current_price <= fib_levels['38.2%']:
-            trade_ideas.append(self.format_message("[TRADE IDEA] Slightly bearish, price near 23.6% Fibonacci retracement."))
-        if current_price <= fib_levels['23.6%']:
-            trade_ideas.append(self.format_message("[TRADE IDEA] Bearish, price below 23.6% Fibonacci retracement."))
+        if current_price > fib_levels_90days['50.0%']:
+            trade_ideas.append("[TRADE IDEA] Bullish, price above 50% 90 days Fibonacci retracement.")
+        if fib_levels_90days['38.2%'] < current_price <= fib_levels_90days['50.0%']:
+            trade_ideas.append("[TRADE IDEA] Slightly bullish, price near 38.2% 90 days Fibonacci retracement.")
+        if fib_levels_90days['23.6%'] < current_price <= fib_levels_90days['38.2%']:
+            trade_ideas.append("[TRADE IDEA] Slightly bearish, price near 23.6% 90 days Fibonacci retracement.")
+        if current_price <= fib_levels_90days['23.6%']:
+            trade_ideas.append("[TRADE IDEA] Bearish, price below 23.6% 90 days Fibonacci retracement.")
 
-        # RSI-based trade decision
+    # RSI-based trade decision
         rsi_signal = self.rsi_trade_decision(data)
         if rsi_signal == "Bullish":
-            trade_ideas.append(self.format_message("[TRADE IDEA] 14-period RSI indicates oversold conditions, suggesting a bullish opportunity."))
+            trade_ideas.append("[TRADE IDEA] 14-period RSI indicates oversold conditions, suggesting a bullish opportunity.")
         elif rsi_signal == "Bearish":
-            trade_ideas.append(self.format_message("[TRADE IDEA] 14-period RSI indicates overbought conditions, suggesting a bearish opportunity."))
+            trade_ideas.append("[TRADE IDEA] 14-period RSI indicates overbought conditions, suggesting a bearish opportunity.")
 
         # RSI 7 trade idea log
         if latest_rsi_7 > 70:
-            print(self.format_message("[TRADE IDEA] 7-period RSI indicates overbought conditions, bearish."))
+            print("[TRADE IDEA] 7-period RSI indicates overbought conditions, bearish.")
         elif latest_rsi_7 < 30:
-            print(self.format_message("[TRADE IDEA] 7-period RSI indicates oversold conditions, bullish."))
+            print("[TRADE IDEA] 7-period RSI indicates oversold conditions, bullish.")
         else:
             print("[TRADE IDEA] 7-period RSI is neutral, no strong signal.")
         
         # RSI 21 trade idea log
         if latest_rsi_21 > 70:
-            print(self.format_message("[TRADE IDEA] 21-period RSI indicates overbought conditions, bearish."))
+            print("[TRADE IDEA] 21-period RSI indicates overbought conditions, bearish.")
         elif latest_rsi_21 < 30:
-            print(self.format_message("[TRADE IDEA] 21-period RSI indicates oversold conditions, bullish."))
+            print("[TRADE IDEA] 21-period RSI indicates oversold conditions, bullish.")
         else:
             print("[TRADE IDEA] 21-period RSI is neutral, no strong signal.")
         
         # RSI convergence logic
         if latest_rsi_7 > latest_rsi_21:
-            print(self.format_message("[TRADE IDEA] 7-period RSI above 21-period RSI: Bullish momentum detected."))
+            print("[TRADE IDEA] 7-period RSI above 21-period RSI: Bullish momentum detected.")
         elif latest_rsi_7 < latest_rsi_21:
-            print(self.format_message("[TRADE IDEA] 7-period RSI below 21-period RSI: Bearish momentum detected."))
+            print("[TRADE IDEA] 7-period RSI below 21-period RSI: Bearish momentum detected.")
         else:
             print("[TRADE IDEA] RSI 7 and 21 are equal: Neutral trend.")
 
-        # Stochastic Oscillator decision
+    # Stochastic Oscillator decision
         stochastic_decision = self.calculate_stochastic_oscillator(data)
         if stochastic_decision == "CALL":
-            trade_ideas.append(self.format_message("[TRADE IDEA] Stochastic Oscillator indicates oversold conditions, bullish signal."))
+            trade_ideas.append("[TRADE IDEA] Stochastic Oscillator indicates CALL options.")
         elif stochastic_decision == "PUT":
-            trade_ideas.append(self.format_message("[TRADE IDEA] Stochastic Oscillator indicates overbought conditions, bearish signal."))
+            trade_ideas.append("[TRADE IDEA] Stochastic Oscillator indicates PUT options.")
 
-        # MACD-based trade decision
+    # MACD-based trade decision
         if latest_macd is not None and self.macd_overbought_zone is not None and self.macd_oversold_zone is not None:
             if latest_macd > self.macd_overbought_zone:
-                trade_ideas.append(self.format_message("[TRADE IDEA] MACD is in overbought zone, bearish signal."))
+                trade_ideas.append("[TRADE IDEA] MACD is in overbought zone. Consider selling or buying PUT options.")
             elif latest_macd < self.macd_oversold_zone:
-                trade_ideas.append(self.format_message("[TRADE IDEA] MACD is in oversold zone, bullish signal."))
+                trade_ideas.append("[TRADE IDEA] MACD is in oversold zone. Consider buying or buying CALL options.")
             else:
                 print("[TRADE IDEA] MACD is in neutral zone. No strong signal.")
 
-        # Candlestick pattern analysis
+    # Candlestick pattern analysis
         pattern_signals = self.candlestick_patterns(data)
         for pattern, signal in pattern_signals.items():
             if signal > 0:
-                trade_ideas.append(self.format_message(f"[TRADE IDEA] Bullish pattern detected: {pattern}"))
+                trade_ideas.append(f"[TRADE IDEA] Bullish pattern detected: {pattern}")
             elif signal < 0:
-                trade_ideas.append(self.format_message(f"[TRADE IDEA] Bearish pattern detected: {pattern}"))
+                trade_ideas.append(f"[TRADE IDEA] Bearish pattern detected: {pattern}")
 
-        # Support and Resistance analysis
+    # Support and Resistance analysis
         for period, levels in support_resistance_levels.items():
             if current_price > levels[1]:
-                trade_ideas.append(self.format_message(f"[TRADE IDEA] Price broke above {period} day resistance, bullish signal."))
+                trade_ideas.append(f"[TRADE IDEA] Price broke above {period} day resistance, consider buying.")
             elif current_price < levels[0]:
-                trade_ideas.append(self.format_message(f"[TRADE IDEA] Price broke below {period} day support, bearish signal."))
+                trade_ideas.append(f"[TRADE IDEA] Price broke below {period} day support, consider selling.")
             else:
                 trade_ideas.append(f"[TRADE IDEA] Price is between {period} day support and resistance, no strong signal.")
 
         # Example conditions (retain and ensure all logs are captured)
         if current_price > data['high'].rolling(20).max().iloc[-2]:
-            trade_ideas.append(self.format_message("[TRADE IDEA] Price breaking above 20-day high, bullish signal."))
+            trade_ideas.append("[TRADE IDEA] Price breaking above 20-day high, consider buying.")
         if current_price < data['low'].rolling(20).min().iloc[-2]:
-            trade_ideas.append(self.format_message("[TRADE IDEA] Price breaking below 20-day low, bearish signal."))
+            trade_ideas.append("[TRADE IDEA] Price breaking below 20-day low, consider selling.")
 
-        # ATR-based trade ideas for calls and puts
+
+    # ATR-based trade ideas for calls and puts
         trade_ideas.append(f"[TRADE IDEA] For LONG CALL positions, consider a stop loss at {stop_loss_long:.2f} and take profit at {take_profit_long:.2f}.")
         trade_ideas.append(f"[TRADE IDEA] For LONG PUT positions, consider a stop loss at {stop_loss_short:.2f} and take profit at {take_profit_short:.2f}.")
         trade_ideas.append(f"[TRADE IDEA] For SHORT PUT positions, consider a stop loss at {stop_loss_short:.2f} and take profit at {take_profit_short:.2f}.")
         trade_ideas.append(f"[TRADE IDEA] For SHORT CALL positions, consider a stop loss at {stop_loss_long:.2f} and take profit at {take_profit_long:.2f}.")
 
-        # Log all trade ideas
+    # Log all trade ideas
         if trade_ideas:
             for idea in trade_ideas:
                 print(self.format_message(idea))
         else:
-            print("[TRADE IDEA] No strong trade ideas generated based on the current analysis.")
+            print(self.format_message("[TRADE IDEA] No strong trade ideas generated based on the current analysis."))
 
         return trade_ideas
-    
+     
     def start_trading(self):
         """Main function to run the trading bot."""
         while True:
