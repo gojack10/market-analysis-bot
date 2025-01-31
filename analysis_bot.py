@@ -48,39 +48,56 @@ class TradingBot:
         self.macd_overbought_zone = None  # To store MACD overbought zone
         self.macd_oversold_zone = None   # To store MACD oversold zone
         self.swing_indicators = {}  # To store swing indicator states
+        self.signals = []  # Initialize trade signals list
         # Initialize rate limiter: 5 requests per minute
         self.rate_limiter = RateLimiter(max_requests=5, time_window=60)
 
     def format_message(self, message):
         """Format 'bullish', 'bearish', 'call', 'calls', 'put', 'puts' with appropriate colors."""
-    # Highlight 'bullish' in green
+        # Highlight 'bullish' in green
         message = re.sub(
             r'(bullish)',
             lambda m: colored(m.group(1), 'white', 'on_green', attrs=['bold']),
             message,
             flags=re.IGNORECASE
-    )
-    # Highlight 'bearish' in red
+        )
+        # Highlight 'bearish' in red
         message = re.sub(
             r'(bearish)',
             lambda m: colored(m.group(1), 'white', 'on_red', attrs=['bold']),
             message,
             flags=re.IGNORECASE
-    )
-    # Highlight 'call' and 'calls' in green
+        )
+        # Highlight 'call' and 'calls' in green
         message = re.sub(
             r'\b(calls?)\b',
             lambda m: colored(m.group(1), 'white', 'on_green', attrs=['bold']),
             message,
             flags=re.IGNORECASE
-    )
-    # Highlight 'put' and 'puts' in red
+        )
+        # Highlight 'put' and 'puts' in red
         message = re.sub(
             r'\b(puts?)\b',
             lambda m: colored(m.group(1), 'white', 'on_red', attrs=['bold']),
             message,
             flags=re.IGNORECASE
-    )
+        )
+        
+        # Highlight 'buying' in green
+        message = re.sub(
+            r'\b(buying)\b',
+            lambda m: colored(m.group(1), 'white', 'on_green', attrs=['bold']),
+            message,
+            flags=re.IGNORECASE
+        )
+        
+        # Highlight 'selling' in red
+        message = re.sub(
+            r'\b(selling)\b',
+            lambda m: colored(m.group(1), 'white', 'on_red', attrs=['bold']),
+            message,
+            flags=re.IGNORECASE
+        )
         return message
 
     def _make_request(self, url, params):
