@@ -127,7 +127,7 @@ if the bot doesn't work:
 
 ## for developers
 
-if you want to modify the python file (MAKE SURE YOU ARE USING THE DEV BRANCH NOT MAIN PLEASE), do so using the GitHub website or if you have git and GitHub set up with your preferred IDE, that works fine too, just push to main as normal and ill review changes
+if you want to modify the python file (MAKE SURE YOU ARE USING THE DEV BRANCH NOT MAIN PLEASE), do so using the GitHub website or if you have git and GitHub set up with your preferred IDE, that works fine too, just push to dev and ill review changes
 
 ### branching strategy
 we use a simple branching strategy:
