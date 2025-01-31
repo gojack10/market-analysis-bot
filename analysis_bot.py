@@ -927,6 +927,11 @@ class TradingBot:
         if mag7_analysis:
             print(f"[LOG] SMA20: {mag7_analysis['SMA20']:.2f}")
             print(f"[LOG] SMA50: {mag7_analysis['SMA50']:.2f}")
+            sma20 = mag7_analysis['SMA20']
+            sma50 = mag7_analysis['SMA50']
+        else:
+            sma20 = None
+            sma50 = None
 
         # Calculate additional RSI periods
         data['RSI_7'] = talib.RSI(data['close'], timeperiod=7)
@@ -1062,10 +1067,6 @@ class TradingBot:
         if roc['signal']:
             trade_ideas.append(f"[TRADE IDEA] Momentum ROC: {roc['signal']} (Value: {roc['roc']:.2f}%)")
 
-    # Get SMA20 and SMA50 values
-        sma20 = data['SMA20'].iloc[-1]
-        sma50 = data['SMA50'].iloc[-1]
-
     # VWAP-based signals
         current_price = data['close'].iloc[-1]
     
@@ -1075,9 +1076,10 @@ class TradingBot:
         # Check if VWAP is acting as support
             if data['low'].iloc[-1] <= current_vwap:
                 trade_ideas.append("[TRADE IDEA] VWAP acting as support. Confirm with RSI/MACD.")
-        # Check SMA alignment
-            if current_price > sma20 and current_price > sma50:
-                trade_ideas.append("[TRADE IDEA] Bullish trend confirmed: Price above SMA20 & SMA50.")
+        # Check SMA alignment for Mag7 stocks
+            if sma20 is not None and sma50 is not None:
+                if current_price > sma20 and current_price > sma50:
+                    trade_ideas.append("[TRADE IDEA] Bullish trend confirmed: Price above SMA20 & SMA50.")
     
     # Bearish conditions
         elif current_price < current_vwap:
@@ -1085,10 +1087,10 @@ class TradingBot:
         # Check if VWAP is acting as resistance
             if data['high'].iloc[-1] >= current_vwap:
                 trade_ideas.append("[TRADE IDEA] VWAP acting as resistance. Confirm with RSI/MACD.")
-        # Check SMA alignment
-            if current_price < sma20 and current_price < sma50:
-                trade_ideas.append("[TRADE IDEA] Bearish trend confirmed: Price below SMA20 & SMA50.")
-
+        # Check SMA alignment for Mag7 stocks
+            if sma20 is not None and sma50 is not None:
+                if current_price < sma20 and current_price < sma50:
+                    trade_ideas.append("[TRADE IDEA] Bearish trend confirmed: Price below SMA20 & SMA50.")
 
     # Bollinger Bands conditions
         if current_price > upper_band.iloc[-1]:
