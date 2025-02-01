@@ -247,7 +247,7 @@ class TradingBot:
         else:
             return "No trend data available"
 
-        def fetch_fundamental_data(self):
+    def fetch_fundamental_data(self):
         """Fetch fundamental data using Alpha Vantage's OVERVIEW endpoint."""
         print(f"[LOG] Fetching fundamental data for {self.ticker}...")
         params = {
