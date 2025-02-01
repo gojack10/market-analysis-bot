@@ -1321,26 +1321,27 @@ class TradingBot:
         current_price = latest['close']
         atr = latest['ATR']
 
-# Long Call Recommendation (Bullish)
-        sl_long_call = current_price - (atr * 1.5)
-        tp_long_call = current_price + (atr * 2)
+    # Long Call Recommendation (Bullish)
+        entry_long_call = current_price - (atr * 0.5)  # Enter at a slight pullback to ATR support
+        sl_long_call = entry_long_call - (atr * 1.5)
+        tp_long_call = entry_long_call + (atr * 2)
         self.signals.append(
-            f"[TRADE IDEA] LONG CALL Enter at {current_price:.2f} | "
+            f"[TRADE IDEA] BUY LONG CALL Enter at {entry_long_call:.2f} | "
             f"SL: {sl_long_call:.2f} | TP: {tp_long_call:.2f} | "
-            f"Risk: {((current_price - sl_long_call)/current_price*100):.1f}% | "
-            f"Reward: {((tp_long_call - current_price)/current_price*100):.1f}%"
+            f"Risk: {((entry_long_call - sl_long_call)/entry_long_call*100):.1f}% | "
+            f"Reward: {((tp_long_call - entry_long_call)/entry_long_call*100):.1f}%"
         )
 
-# Long Put Recommendation (Bearish)
-        sl_long_put = current_price + (atr * 1.5)
-        tp_long_put = current_price - (atr * 2)
+    # Long Put Recommendation (Bearish)
+        entry_long_put = current_price + (atr * 0.5)  # Enter at a slight rally to ATR resistance
+        sl_long_put = entry_long_put + (atr * 1.5)
+        tp_long_put = entry_long_put - (atr * 2)
         self.signals.append(
-            f"[TRADE IDEA] LONG PUT Enter at {current_price:.2f} | "
+            f"[TRADE IDEA] BUY LONG PUT Enter at {entry_long_put:.2f} | "
             f"SL: {sl_long_put:.2f} | TP: {tp_long_put:.2f} | "
-            f"Risk: {((sl_long_put - current_price)/current_price*100):.1f}% | "
-            f"Reward: {((current_price - tp_long_put)/current_price*100):.1f}%"
+            f"Risk: {((sl_long_put - entry_long_put)/entry_long_put*100):.1f}% | "
+            f"Reward: {((entry_long_put - tp_long_put)/entry_long_put*100):.1f}%"
         )
-
 
 # Log all recommendations
         log_file = "trade_signals.log"
