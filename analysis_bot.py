@@ -1224,7 +1224,7 @@ class TradingBot:
 
         if mag7_analysis:
             trade_ideas.append(
-                f"[TRADE IDEA] Mag7 Moving Averages: {mag7_analysis['signal']} - {mag7_analysis['reason']}"
+                f"[MARKET SENTIMENT] Moving Averages: {mag7_analysis['signal']} - {mag7_analysis['reason']}"
             )
 
     # Fibonacci retracement conditions
