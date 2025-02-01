@@ -911,37 +911,51 @@ class TradingBot:
         print(f"[MARKET DATA] Market Cap: {format_number(mcap)}")
 
         # Valuation Metrics
-        pe_ttm = data.get('[MARKET DATA] PERatio', 'N/A')
-        pe_fwd = data.get('[MARKET DATA] ForwardPE', 'N/A')
-        pb = data.get('[MARKET DATA] PriceToBookRatio', 'N/A')
-        ps = data.get('[MARKET DATA] PriceToSalesRatioTTM', 'N/A')
-        
-        print(f"[MARKET DATA] P/E (TTM): {pe_ttm}")
-        print(f"[MARKET DATA] P/E (FWD): {pe_fwd}")
-        print(f"[MARKET DATA] P/B: {pb}")
-        print(f"[MARKET DATA] P/S: {ps}")
+        valuation = {
+            "[MARKET DATA] P/E (TTM)": data.get('PERatio', 'N/A'),
+            "[MARKET DATA] P/E (FWD)": data.get('ForwardPE', 'N/A'),
+            "[MARKET DATA] P/B": data.get('PriceToBookRatio', 'N/A'),
+            "[MARKET DATA] P/S": data.get('PriceToSalesRatioTTM', 'N/A')
+        }
+        for label, value in valuation.items():
+            print(f"{label}: {value}")
 
         # Profitability Metrics
-        eps = data.get('[MARKET DATA] EPS', 'N/A')
-        roe = data.get('[MARKET DATA] ReturnOnEquityTTM', 'N/A')
-        print(f"[MARKET DATA] EPS (TTM): ${eps}")
-        print(f"[MARKET DATA] ROE (TTM): {format_number(roe, is_percent=True)}")
+        profitability = {
+            "[MARKET DATA] EPS (TTM)": data.get('EPS', 'N/A'),
+            "[MARKET DATA] ROE (TTM)": data.get('ReturnOnEquityTTM', 'N/A')
+        }
+        for label, value in profitability.items():
+            if "ROE" in label:
+                print(f"{label}: {format_number(value, is_percent=True)}")
+            else:
+                print(f"{label}: ${value}")
 
         # Liquidity and Efficiency
-        current_ratio = data.get('[MARKET DATA] CurrentRatio', 'N/A')
-        profit_margin = data.get('[MARKET DATA] ProfitMargin', 'N/A')
-        print(f"[MARKET DATA] Current Ratio: {current_ratio}")
-        print(f"[MARKET DATA] Profit Margin: {format_number(profit_margin, is_percent=True)}")
+        liquidity = {
+            "[MARKET DATA] Current Ratio": data.get('CurrentRatio', 'N/A'),
+            "[MARKET DATA] Profit Margin": data.get('ProfitMargin', 'N/A')
+        }
+        for label, value in liquidity.items():
+            if "Profit Margin" in label:
+                print(f"{label}: {format_number(value, is_percent=True)}")
+            else:
+                print(f"{label}: {value}")
 
         # Growth Metrics
-        revenue_growth = data.get('[MARKET DATA] QuarterlyRevenueGrowthYOY', 'N/A')
-        eps_growth = data.get('[MARKET DATA] QuarterlyEarningsGrowthYOY', 'N/A')
-        print(f"[MARKET DATA] Revenue Growth (YoY): {format_number(revenue_growth, is_percent=True)}")
-        print(f"[MARKET DATA] EPS Growth (YoY): {format_number(eps_growth, is_percent=True)}")
+        growth = {
+            "[MARKET DATA] Revenue Growth (YoY)": data.get('QuarterlyRevenueGrowthYOY', 'N/A'),
+            "[MARKET DATA] EPS Growth (YoY)": data.get('QuarterlyEarningsGrowthYOY', 'N/A')
+        }
+        for label, value in growth.items():
+            print(f"{label}: {format_number(value, is_percent=True)}")
 
         # Dividend Information
-        dividend_yield = data.get('[MARKET DATA] DividendYield', 'N/A')
-        print(f"[MARKET DATA] Dividend Yield: {format_number(dividend_yield, is_percent=True)}")
+        dividend = {
+            "[MARKET DATA] Dividend Yield": data.get('DividendYield', 'N/A')
+        }
+        for label, value in dividend.items():
+            print(f"{label}: {format_number(value, is_percent=True)}")
 
         # Technical Metrics
         beta = data.get('Beta', 'N/A')
@@ -1196,7 +1210,7 @@ class TradingBot:
     
     # Bullish conditions
         if current_price > current_vwap:
-            trade_ideas.append("[TRADE IDEA] Price above VWAP â€” Look for bullish pullbacks.")
+            trade_ideas.append("[TRADE IDEA] Price above VWAP â€" Look for bullish pullbacks.")
         # Check if VWAP is acting as support
             if data['low'].iloc[-1] <= current_vwap:
                 trade_ideas.append("[TRADE IDEA] VWAP acting as support. Confirm with RSI/MACD.")
@@ -1206,7 +1220,7 @@ class TradingBot:
     
     # Bearish conditions
         elif current_price < current_vwap:
-            trade_ideas.append("[TRADE IDEA] Price below VWAP â€” Look for bearish rejections.")
+            trade_ideas.append("[TRADE IDEA] Price below VWAP â€" Look for bearish rejections.")
         # Check if VWAP is acting as resistance
             if data['high'].iloc[-1] >= current_vwap:
                 trade_ideas.append("[TRADE IDEA] VWAP acting as resistance. Confirm with RSI/MACD.")
