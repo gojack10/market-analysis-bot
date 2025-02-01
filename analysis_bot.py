@@ -53,45 +53,43 @@ class TradingBot:
         self.rate_limiter = RateLimiter(max_requests=10, time_window=60)
 
     def format_message(self, message):
-        """Format 'bullish', 'bearish', 'call', 'calls', 'put', 'puts' with appropriate colors."""
-        # Highlight 'bullish' in green
+        """Format 'bullish', 'bearish', 'call', 'calls', 'put', 'puts', 'buying', 'selling' with appropriate colors."""
+    # Highlight 'bullish' in green
         message = re.sub(
-            r'(bullish)',
+            r'\b(bullish)\b',
             lambda m: colored(m.group(1), 'white', 'on_green', attrs=['bold']),
             message,
             flags=re.IGNORECASE
         )
-        # Highlight 'bearish' in red
+    # Highlight 'bearish' in red
         message = re.sub(
-            r'(bearish)',
+            r'\b(bearish)\b',
             lambda m: colored(m.group(1), 'white', 'on_red', attrs=['bold']),
             message,
             flags=re.IGNORECASE
         )
-        # Highlight 'call' and 'calls' in green
+    # Highlight 'call' and 'calls' in green
         message = re.sub(
-            r'\b(calls?)\b',
+            r'\b(call|calls)\b',
             lambda m: colored(m.group(1), 'white', 'on_green', attrs=['bold']),
             message,
             flags=re.IGNORECASE
         )
-        # Highlight 'put' and 'puts' in red
+    # Highlight 'put' and 'puts' in red
         message = re.sub(
-            r'\b(puts?)\b',
+            r'\b(put|puts)\b',
             lambda m: colored(m.group(1), 'white', 'on_red', attrs=['bold']),
             message,
             flags=re.IGNORECASE
-        )
-        
-        # Highlight 'buying' in green
+    )
+    # Highlight 'buying' in green
         message = re.sub(
             r'\b(buying)\b',
             lambda m: colored(m.group(1), 'white', 'on_green', attrs=['bold']),
             message,
             flags=re.IGNORECASE
         )
-        
-        # Highlight 'selling' in red
+    # Highlight 'selling' in red
         message = re.sub(
             r'\b(selling)\b',
             lambda m: colored(m.group(1), 'white', 'on_red', attrs=['bold']),
@@ -99,6 +97,21 @@ class TradingBot:
             flags=re.IGNORECASE
         )
         return message
+
+    def _make_request(self, url, params):
+        """Make a rate-limited request to the API."""
+        self.rate_limiter.wait_if_needed()
+        response = requests.get(url, params=params)
+        
+        # Check for rate limit messages in the response
+        if response.status_code == 200:
+            data = response.json()
+            if "Note" in data:
+                print("[WARN] API call frequency note received:", data["Note"])
+            if "Information" in data:
+                print("[INFO] API information:", data["Information"])
+        
+        return response
 
     def _make_request(self, url, params):
         """Make a rate-limited request to the API."""
@@ -233,6 +246,24 @@ class TradingBot:
                 return "Sideways"
         else:
             return "No trend data available"
+
+        def fetch_fundamental_data(self):
+        """Fetch fundamental data using Alpha Vantage's OVERVIEW endpoint."""
+        print(f"[LOG] Fetching fundamental data for {self.ticker}...")
+        params = {
+            "function": "OVERVIEW",
+            "symbol": self.ticker,
+            "apikey": self.api_key
+        }
+        response = self._make_request(self.base_url, params)
+        if response.status_code == 200:
+            data = response.json()
+            if "Error Message" in data:
+                print(f"[ERROR] Failed to fetch fundamentals: {data['Error Message']}")
+                return None
+            return data
+        print(f"[ERROR] Failed to fetch fundamentals: {response.status_code}, {response.text}")
+        return None
 
     def calculate_rvi(self, data, period=10):
         """Calculate the Relative Vigor Index (RVI)."""
@@ -431,22 +462,22 @@ class TradingBot:
             
             # Regular divergence (reversal)
             if (latest_close > prev_close and latest_k < prev_k):
-                print(self.format_message("[TRADE IDEA] Regular bearish divergence detected. Potential reversal down."))
+                print(self.format_message("[MARKET SENTIMENT] Regular bearish divergence detected. Potential reversal down."))
             elif (latest_close < prev_close and latest_k > prev_k):
-                print(self.format_message("[TRADE IDEA] Regular bullish divergence detected. Potential reversal up."))
+                print(self.format_message("[MARKET SENTIMENT] Regular bullish divergence detected. Potential reversal up."))
             
             # Hidden divergence (continuation)
             if (latest_close > prev_close and latest_k > prev_k):
-                print(self.format_message("[TRADE IDEA] Hidden bullish divergence detected. Potential continuation up."))
+                print(self.format_message("[MARKET SENTIMENT] Hidden bullish divergence detected. Potential continuation up."))
             elif (latest_close < prev_close and latest_k < prev_k):
-                print(self.format_message("[TRADE IDEA] Hidden bearish divergence detected. Potential continuation down."))
+                print(self.format_message("[MARKET SENTIMENT] Hidden bearish divergence detected. Potential continuation down."))
 
         # Determine trade decision
         if latest_k < 20 and latest_d < 20:
-            print(self.format_message("[TRADE IDEA] The stochastic Oscillator suggests oversold conditions, bullish signal."))
+            print(self.format_message("[MARKET SENTIMENT] The stochastic Oscillator suggests oversold conditions, bullish signal."))
             return "CALL"
         elif latest_k > 80 and latest_d > 80:
-            print(self.format_message("[TRADE IDEA] The stochastic Oscillator suggests overbought conditions, bearish signal."))
+            print(self.format_message("[MARKET SENTIMENT] The stochastic Oscillator suggests overbought conditions, bearish signal."))
             return "PUT"
         else:
             print("[TRADE IDEA] The stochastic Oscillator is neutral, no strong signal.")
@@ -471,11 +502,11 @@ class TradingBot:
         
         # Trade decision based on RSI
         if latest_rsi_14 > 70:
-            print(self.format_message("[TRADE IDEA] 14-period RSI indicates overbought conditions, bearish signal."))
+            print(self.format_message("[MARKET SENTIMENT] 14-period RSI indicates overbought conditions, bearish signal."))
         elif latest_rsi_14 < 30:
-            print(self.format_message("[TRADE IDEA] 14-period RSI indicates oversold conditions, bullish signal."))
+            print(self.format_message("[MARKET SENTIMENT] 14-period RSI indicates oversold conditions, bullish signal."))
         else:
-            print("[TRADE IDEA] 14-period RSI is neutral, no strong signal.")
+            print("[MARKET SENTIMENT] 14-period RSI is neutral, no strong signal.")
         
         # Return suggestion
         if latest_rsi_14 > 70:
@@ -854,6 +885,75 @@ class TradingBot:
 
         return support_resistance_levels
 
+    def log_fundamentals(self, data):
+        """Log fundamental metrics in a readable format."""
+        if not data:
+            return
+        
+        # Helper function to format numbers
+        def format_number(value, is_percent=False):
+            try:
+                num = float(value)
+                if is_percent:
+                    return f"{num:.2f}%"
+                if num >= 1e12:
+                    return f"${num/1e12:.2f}T"
+                if num >= 1e9:
+                    return f"${num/1e9:.2f}B"
+                if num >= 1e6:
+                    return f"${num/1e6:.2f}M"
+                return f"${num:,.2f}"
+            except:
+                return "N/A"
+
+        # Market Capitalization
+        mcap = data.get('MarketCapitalization')
+        print(f"[MARKET DATA] Market Cap: {format_number(mcap)}")
+
+        # Valuation Metrics
+        pe_ttm = data.get('[MARKET DATA] PERatio', 'N/A')
+        pe_fwd = data.get('[MARKET DATA] ForwardPE', 'N/A')
+        pb = data.get('[MARKET DATA] PriceToBookRatio', 'N/A')
+        ps = data.get('[MARKET DATA] PriceToSalesRatioTTM', 'N/A')
+        
+        print(f"[MARKET DATA] P/E (TTM): {pe_ttm}")
+        print(f"[MARKET DATA] P/E (FWD): {pe_fwd}")
+        print(f"[MARKET DATA] P/B: {pb}")
+        print(f"[MARKET DATA] P/S: {ps}")
+
+        # Profitability Metrics
+        eps = data.get('[MARKET DATA] EPS', 'N/A')
+        roe = data.get('[MARKET DATA] ReturnOnEquityTTM', 'N/A')
+        print(f"[MARKET DATA] EPS (TTM): ${eps}")
+        print(f"[MARKET DATA] ROE (TTM): {format_number(roe, is_percent=True)}")
+
+        # Liquidity and Efficiency
+        current_ratio = data.get('[MARKET DATA] CurrentRatio', 'N/A')
+        profit_margin = data.get('[MARKET DATA] ProfitMargin', 'N/A')
+        print(f"[MARKET DATA] Current Ratio: {current_ratio}")
+        print(f"[MARKET DATA] Profit Margin: {format_number(profit_margin, is_percent=True)}")
+
+        # Growth Metrics
+        revenue_growth = data.get('[MARKET DATA] QuarterlyRevenueGrowthYOY', 'N/A')
+        eps_growth = data.get('[MARKET DATA] QuarterlyEarningsGrowthYOY', 'N/A')
+        print(f"[MARKET DATA] Revenue Growth (YoY): {format_number(revenue_growth, is_percent=True)}")
+        print(f"[MARKET DATA] EPS Growth (YoY): {format_number(eps_growth, is_percent=True)}")
+
+        # Dividend Information
+        dividend_yield = data.get('[MARKET DATA] DividendYield', 'N/A')
+        print(f"[MARKET DATA] Dividend Yield: {format_number(dividend_yield, is_percent=True)}")
+
+        # Technical Metrics
+        beta = data.get('Beta', 'N/A')
+        high_52 = data.get('52WeekHigh', 'N/A')
+        low_52 = data.get('52WeekLow', 'N/A')
+        print(f"[MARKET DATA] 52-Week Range: {format_number(low_52)} - {format_number(high_52)}")
+        print(f"[MARKET DATA] Beta: {beta}")
+
+        # Additional Metrics
+        shares_outstanding = data.get('SharesOutstanding', 'N/A')
+        print(f"[MARKET DATA] Shares Outstanding: {format_number(shares_outstanding)}")
+
     def macd_trade_decision(self, data):
         """
         Generate trade signals based on MACD crossovers in overbought or oversold zones.
@@ -873,6 +973,13 @@ class TradingBot:
     
     def trade_idea(self, data):
         """Determine a trade idea based on Fibonacci retracement, Bollinger Bands, RSI, MACD, and ATR."""
+        self.analyze_historical_trends(data)
+    # Initialize the trade_ideas list
+        trade_ideas = []
+
+        # Calculate all required indicators first
+        data = self.calculate_indicators(data)
+        
     # Calculate ADX DMI
         adx_dmi = self.calculate_adx_dmi(data)
 
@@ -891,7 +998,15 @@ class TradingBot:
     # Calculate KVO
         kvo_data = self.calculate_kvo(data)
         kvo = kvo_data['KVO']
-   
+
+    # KVO logic
+        if kvo > 0:
+            print(self.format_message("[MARKET DATA] KVO indicates positive money flow. Potential buying pressure detected."))
+            trade_ideas.append("[TRADE IDEA] KVO suggests institutional buying, consider call positions.")
+        elif kvo < 0:
+            print(self.format_message("[MARKET DATA] KVO indicates negative money flow. Potential selling pressure detected."))
+            trade_ideas.append("[TRADE IDEA] KVO suggests institutional selling, consider put positions.")
+
     # Calculate Fibonacci retracement levels
         yearly_fib_levels = self.calculate_yearly_fibonacci_retracement(data)
         fib_levels_90days = self.calculate_90days_fibonacci_retracement(data)
@@ -906,12 +1021,12 @@ class TradingBot:
         self.calculate_macd_zones(data)
         latest_macd = self.macd_trade_decision(data)  # Get the latest MACD value
 
-        print(f"[LOG] ADX: {adx_dmi['ADX']:.2f}, +DI: {adx_dmi['Plus_DI']:.2f}, -DI: {adx_dmi['Minus_DI']:.2f}")
+        print(f"[INDICATOR] ADX: {adx_dmi['ADX']:.2f}, +DI: {adx_dmi['Plus_DI']:.2f}, -DI: {adx_dmi['Minus_DI']:.2f}")
 
     # Calculate VWAP and log
         vwap = self.calculate_vwap(data)
         current_vwap = vwap.iloc[-1]
-        print(f"[LOG] Current VWAP: {current_vwap:.2f}")
+        print(f"[INDICATOR] Current VWAP: {current_vwap:.2f}")
     
     # Calculate ATR for stop loss and take profit levels
         atr_levels = self.calculate_atr(data)
@@ -921,255 +1036,246 @@ class TradingBot:
         stop_loss_short = atr_levels["stop_loss_short"]
         take_profit_short = atr_levels["take_profit_short"]
 
-        print(f"[LOG] Current ATR: {atr}")
+        print(f"[INDICATOR] Current ATR: {atr}")
 
-        print("[LOG] Fibonacci Levels:")
+        print("[INDICATOR] Fibonacci Levels:")
         for level, price in yearly_fib_levels.items():
             print(f"{level}: {price}")
-        print("[LOG] Fibonacci Levels:")
+        print("[INDICATOR] Fibonacci Levels:")
         for level, price in fib_levels_90days.items():
             print(f"{level}: {price}")
 
-        print("[LOG] Bollinger Bands:")
+        print("[INDICATOR] Bollinger Bands:")
         print(f"Upper Band: {upper_band.iloc[-1]}")
         print(f"Lower Band: {lower_band.iloc[-1]}")
 
-        print("[LOG] Support and Resistance Levels:")
+        print("[INDICATOR] Support and Resistance Levels:")
         for period, levels in support_resistance_levels.items():
             print(f"{period} day Support Level: {levels[0]}")
             print(f"{period} day Resistance Level: {levels[1]}")
 
-        # Add Mag7 Moving Average analysis
+    # Add Mag7 Moving Average analysis
         mag7_analysis = self.calculate_mag7_moving_averages(data)
         if mag7_analysis:
-            print(f"[LOG] SMA20: {mag7_analysis['SMA20']:.2f}")
-            print(f"[LOG] SMA50: {mag7_analysis['SMA50']:.2f}")
-            sma20 = mag7_analysis['SMA20']
-            sma50 = mag7_analysis['SMA50']
-        else:
-            sma20 = None
-            sma50 = None
+            print(f"[INDICATOR] SMA20: {mag7_analysis['SMA20']:.2f}")
+            print(f"[INDICATOR] SMA50: {mag7_analysis['SMA50']:.2f}")
 
-        # Calculate additional RSI periods
+    # Calculate additional RSI periods
         data['RSI_7'] = talib.RSI(data['close'], timeperiod=7)
         data['RSI_14'] = talib.RSI(data['close'], timeperiod=14)
         data['RSI_21'] = talib.RSI(data['close'], timeperiod=21)
-        
+    
         latest_rsi_7 = data['RSI_7'].iloc[-1]
         latest_rsi_21 = data['RSI_21'].iloc[-1]
-        
-        # Log all RSI values clearly
-        print("\n[LOG] RSI Levels:")
-        print(f"7-period RSI: {data['RSI_7'].iloc[-1]:.2f}")
-        print(f"14-period RSI: {data['RSI_14'].iloc[-1]:.2f}")
-        print(f"21-period RSI (Market Trend): {data['RSI'].iloc[-1]:.2f}")
+    
+    # Log all RSI values clearly
+        print(f"[INDICATOR] 7-period RSI: {data['RSI_7'].iloc[-1]:.2f}")
+        print(f"[INDICATOR] 14-period RSI: {data['RSI_14'].iloc[-1]:.2f}")
+        print(f"[INDICATOR] 21-period RSI (Market Trend): {data['RSI'].iloc[-1]:.2f}")
 
     # Collect trade ideas
         trade_ideas = []
         current_price = data['close'].iloc[-1]
-        print(f"[LOG] Current Price: {current_price}")
+        print(f"[MARKET DATA] Current Price: {current_price}")
 
-        # ADDED: Recent price and volume logging
+    # ADDED: Recent price and volume logging
         recent_high = data['high'].tail(30).max()  # 30-day high
         recent_low = data['low'].tail(30).min()    # 30-day low
         current_volume = data['volume'].iloc[-1]
-        
-        print(f"\n[LOG] Recent Price & Volume Analysis:")
-        print(f"30-Day High: {recent_high:.2f}")
-        print(f"30-Day Low: {recent_low:.2f}")
-        print(f"Current Volume: {current_volume:,}")  # Format with commas
+    
+        print(f"[MARKET DATA] 30-Day High: {recent_high:.2f}")
+        print(f"[MARKET DATA] 30-Day Low: {recent_low:.2f}")
+        print(f"[MARKET DATA] Current Volume: {current_volume:,}")  # Format with commas
 
-        # Calculate and log volatility (ADDED SECTION)
+    # Calculate and log volatility (ADDED SECTION)
         daily_returns = data['close'].pct_change().dropna()
         if len(daily_returns) >= 30:
             historical_volatility = daily_returns.tail(30).std()
             annualized_volatility = historical_volatility * np.sqrt(252)  # 252 trading days/year
-            print(f"[LOG] 30-Day Historical Volatility (Daily): {historical_volatility:.4f}")
-            print(f"[LOG] Annualized Volatility: {annualized_volatility:.4f}")
+            print(f"[MARKET DATA] 30-Day Historical Volatility (Daily): {historical_volatility:.4f}")
+            print(f"[MARKET DATA] Annualized Volatility: {annualized_volatility:.4f}")
         else:
-            print("[LOG] Not enough data to calculate 30-day historical volatility")
+            print("[MARKET DATA] Not enough data to calculate 30-day historical volatility")
 
+    # RVI Bullish
         if rvi > signal:
-            print("[TRADE IDEA] RVI indicates bullish momentum. Consider long positions.")
+            print(self.format_message("[MARKET SENTIMENT] RVI indicates bullish momentum. Consider long positions."))
             trade_ideas.append("[TRADE IDEA] RVI crossover suggests buying opportunity.")
         elif rvi < signal:
-            print("[TRADE IDEA] RVI indicates bearish momentum. Consider short positions.")
+            print(self.format_message("[MARKET SENTIMENT] RVI indicates bearish momentum. Consider short positions."))
             trade_ideas.append("[TRADE IDEA] RVI crossover suggests selling opportunity.")
 
-    # Log Coppock Curve trade idea
+    # Coppock Curve
         if coppock > 0:
-            print("[TRADE IDEA] Coppock Curve turning positive. Possible long-term bullish trend forming.")
-            trade_ideas.append("[TRADE IDEA] Coppock Curve suggests long-term buying opportunity.")
+            print(self.format_message("[MARKET SENTIMENT] Coppock Curve turning positive. Possible long-term bullish trend forming."))
+            trade_ideas.append(self.format_message("[TRADE IDEA] Coppock Curve suggests long-term buying opportunity."))
         else:
-            print("[TRADE IDEA] Coppock Curve remains negative. No strong bullish trend yet.")
+            print(self.format_message("[MARKET SENTIMENT] Coppock Curve remains negative. No strong bullish trend yet."))
 
-    # Log DPO trade idea
+    # DPO
         if dpo > 0:
-            print("[TRADE IDEA] DPO is positive. Short-term bullish cycle detected.")
+            print(self.format_message("[MARKET SENTIMENT] DPO is positive. Short-term bullish cycle detected."))
             trade_ideas.append("[TRADE IDEA] DPO suggests a buying opportunity for short-term swing trades.")
         elif dpo < 0:
-            print("[TRADE IDEA] DPO is negative. Short-term bearish cycle detected.")
+            print(self.format_message("[MARKET SENTIMENT] DPO is negative. Short-term bearish cycle detected."))
             trade_ideas.append("[TRADE IDEA] DPO suggests a selling opportunity for short-term swing trades.")
 
-    # Log KVO trade idea
+    # KVO
         if kvo > 0:
-            print("[TRADE IDEA] KVO indicates positive money flow. Potential buying pressure detected.")
-            trade_ideas.append("[TRADE IDEA] KVO suggests institutional buying, consider long positions.")
+            print(self.format_message("[MARKET SENTIMENT] KVO indicates positive money flow. Potential buying pressure detected."))
+            trade_ideas.append("[TRADE IDEA] KVO suggests institutional buying, consider call positions.")
         elif kvo < 0:
-            print("[TRADE IDEA] KVO indicates negative money flow. Potential selling pressure detected.")
-            trade_ideas.append("[TRADE IDEA] KVO suggests institutional selling, consider short positions.")
+            print(self.format_message("[MARKET SENTIMENT] KVO indicates negative money flow. Potential selling pressure detected."))
+            trade_ideas.append("[TRADE IDEA] KVO suggests institutional selling, consider put positions.")
 
-        print(f"[TRADE IDEA] ADX and DMI Trend Analysis: {adx_dmi['Trend Signal']}")
-        if adx_dmi['Trend Signal'] == "Strong Bullish Trend":
-            trade_ideas.append("[TRADE IDEA] Consider long positions as ADX confirms a strong bullish trend.")
-        elif adx_dmi['Trend Signal'] == "Strong Bearish Trend":
-            trade_ideas.append("[TRADE IDEA] Consider short positions as ADX confirms a strong bearish trend.")
-
-        # Ichimoku Cloud
+    # Ichimoku Cloud
         ichimoku = self.ichimoku_cloud(data)
         if ichimoku['signal']:
             trade_ideas.append(f"[TRADE IDEA] Ichimoku Cloud: {ichimoku['signal']} Signal (Price: {data['close'].iloc[-1]:.2f}, Cloud Top: {ichimoku['cloud_top']:.2f})")
 
-        # Volume Weighted MACD
+    # Volume Weighted MACD
         vwmacd = self.volume_weighted_macd(data)
         if vwmacd['signal']:
             trade_ideas.append(f"[TRADE IDEA] Volume-Weighted MACD: {vwmacd['signal']} Signal (Value: {vwmacd['vwmacd']:.2f})")
 
-        # Supertrend
+    # Supertrend
         supertrend = self.supertrend(data)
         trade_ideas.append(f"[TRADE IDEA] Supertrend: {supertrend['signal']} (Current Level: {supertrend['supertrend']:.2f})")
 
-        # Elder's Force Index
+    # Elder's Force Index
         fi = self.elders_force_index(data)
         if fi['signal']:
             trade_ideas.append(f"[TRADE IDEA] Force Index: {fi['signal']} (Value: {fi['fi']:.2f})")
 
-        # Money Flow Index
+    # Money Flow Index
         mfi = self.money_flow_index(data)
         if mfi['signal']:
             trade_ideas.append(f"[TRADE IDEA] Money Flow Index: {mfi['signal']} (Value: {mfi['mfi']:.2f})")
 
-        # Chaikin Oscillator
+    # Chaikin Oscillator
         chaikin = self.chaikin_oscillator(data)
         if chaikin['signal']:
             trade_ideas.append(f"[TRADE IDEA] Chaikin Oscillator: {chaikin['signal']} (Value: {chaikin['chaikin']:.2f})")
 
-        # Vortex Indicator
+    # Vortex Indicator
         vortex = self.vortex_indicator(data)
         if vortex['signal']:
             trade_ideas.append(f"[TRADE IDEA] Vortex: {vortex['signal']} (VI+: {vortex['vi_plus']:.2f}, VI-: {vortex['vi_minus']:.2f})")
 
-        # Keltner Channels
+    # Keltner Channels
         keltner = self.keltner_channels(data)
         if keltner['signal']:
             trade_ideas.append(f"[TRADE IDEA] Keltner: {keltner['signal']} (Price: {data['close'].iloc[-1]:.2f}, Upper: {keltner['upper']:.2f}, Lower: {keltner['lower']:.2f})")
 
-        # Donchian Channels
+    # Donchian Channels
         donchian = self.donchian_channels(data)
         if donchian['signal']:
             trade_ideas.append(f"[TRADE IDEA] Donchian Breakout: {donchian['signal']} (Price: {data['close'].iloc[-1]:.2f}, Upper: {donchian['upper']:.2f}, Lower: {donchian['lower']:.2f})")
 
-        # Schaff Trend Cycle
+    # Schaff Trend Cycle
         stc = self.schaff_trend_cycle(data)
         if stc['signal']:
             trade_ideas.append(f"[TRADE IDEA] Schaff Trend Cycle: {stc['signal']} (Value: {stc['stc']:.2f})")
 
-        # Volume Spike Detection
+    # Volume Spike Detection
         volume_spike = self.detect_volume_spikes(data)
         if volume_spike['signal']:
             trade_ideas.append(f"[TRADE IDEA] Volume Spike: {volume_spike['signal']} (Ratio: {volume_spike['volume_ratio']:.1f}x average)")
 
-        # Rate of Change
+    # Rate of Change
         roc = self.rate_of_change(data)
         if roc['signal']:
             trade_ideas.append(f"[TRADE IDEA] Momentum ROC: {roc['signal']} (Value: {roc['roc']:.2f}%)")
+
+    # Get SMA20 and SMA50 values
+        sma20 = data['SMA20'].iloc[-1]
+        sma50 = data['SMA50'].iloc[-1]
 
     # VWAP-based signals
         current_price = data['close'].iloc[-1]
     
     # Bullish conditions
         if current_price > current_vwap:
-            trade_ideas.append("[TRADE IDEA] Price above VWAP → Look for bullish pullbacks.")
+            trade_ideas.append("[TRADE IDEA] Price above VWAP â€” Look for bullish pullbacks.")
         # Check if VWAP is acting as support
             if data['low'].iloc[-1] <= current_vwap:
                 trade_ideas.append("[TRADE IDEA] VWAP acting as support. Confirm with RSI/MACD.")
-        # Check SMA alignment for Mag7 stocks
-            if sma20 is not None and sma50 is not None:
-                if current_price > sma20 and current_price > sma50:
-                    trade_ideas.append("[TRADE IDEA] Bullish trend confirmed: Price above SMA20 & SMA50.")
+        # Check SMA alignment
+            if current_price > sma20 and current_price > sma50:
+                trade_ideas.append("[MARKET SENTIMENT] Bullish trend confirmed: Price above SMA20 & SMA50.")
     
     # Bearish conditions
         elif current_price < current_vwap:
-            trade_ideas.append("[TRADE IDEA] Price below VWAP → Look for bearish rejections.")
+            trade_ideas.append("[TRADE IDEA] Price below VWAP â€” Look for bearish rejections.")
         # Check if VWAP is acting as resistance
             if data['high'].iloc[-1] >= current_vwap:
                 trade_ideas.append("[TRADE IDEA] VWAP acting as resistance. Confirm with RSI/MACD.")
-        # Check SMA alignment for Mag7 stocks
-            if sma20 is not None and sma50 is not None:
-                if current_price < sma20 and current_price < sma50:
-                    trade_ideas.append("[TRADE IDEA] Bearish trend confirmed: Price below SMA20 & SMA50.")
+        # Check SMA alignment
+            if current_price < sma20 and current_price < sma50:
+                trade_ideas.append("[MARKET SENTIMENT] Bearish trend confirmed: Price below SMA20 & SMA50.")
 
     # Bollinger Bands conditions
         if current_price > upper_band.iloc[-1]:
-            trade_ideas.append("[TRADE IDEA] Bearish, price above upper Bollinger Band.")
+            trade_ideas.append("[MARKET SENTIMENT] Bearish, price above upper Bollinger Band.")
         elif current_price < lower_band.iloc[-1]:
-            trade_ideas.append("[TRADE IDEA] Bullish, price below lower Bollinger Band.")
+            trade_ideas.append("[MARKET SENTIMENT] Bullish, price below lower Bollinger Band.")
         else:
-            print("[TRADE IDEA] Price is within Bollinger Bands. No strong signal.")
+            print("[MARKET SENTIMENT] Price is within Bollinger Bands. No strong signal.")
 
         if mag7_analysis:
             trade_ideas.append(
                 f"[TRADE IDEA] Mag7 Moving Averages: {mag7_analysis['signal']} - {mag7_analysis['reason']}"
             )
+
     # Fibonacci retracement conditions
         if current_price > yearly_fib_levels['50.0%']:
-            trade_ideas.append("[TRADE IDEA] Bullish, price above 50% yearly Fibonacci retracement.")
+            trade_ideas.append("[MARKET SENTIMENT] Bullish, price above 50% yearly Fibonacci retracement.")
         if yearly_fib_levels['38.2%'] < current_price <= yearly_fib_levels['50.0%']:
-            trade_ideas.append("[TRADE IDEA] Slightly bullish, price near 38.2% yearly Fibonacci retracement.")
+            trade_ideas.append("[MARKET SENTIMENT] Slightly bullish, price near 38.2% yearly Fibonacci retracement.")
         if yearly_fib_levels['23.6%'] < current_price <= yearly_fib_levels['38.2%']:
-            trade_ideas.append("[TRADE IDEA] Slightly bearish, price near 23.6% yearly Fibonacci retracement.")
+            trade_ideas.append("[MARKET SENTIMENT] Slightly bearish, price near 23.6% yearly Fibonacci retracement.")
         if current_price <= yearly_fib_levels['23.6%']:
-            trade_ideas.append("[TRADE IDEA] Bearish, price below 23.6% yearly Fibonacci retracement.")
+            trade_ideas.append("[MARKET SENTIMENT] Bearish, price below 23.6% yearly Fibonacci retracement.")
 
         if current_price > fib_levels_90days['50.0%']:
-            trade_ideas.append("[TRADE IDEA] Bullish, price above 50% 90 days Fibonacci retracement.")
+            trade_ideas.append("[MARKET SENTIMENT] Bullish, price above 50% 90 days Fibonacci retracement.")
         if fib_levels_90days['38.2%'] < current_price <= fib_levels_90days['50.0%']:
-            trade_ideas.append("[TRADE IDEA] Slightly bullish, price near 38.2% 90 days Fibonacci retracement.")
+            trade_ideas.append("[MARKET SENTIMENT] Slightly bullish, price near 38.2% 90 days Fibonacci retracement.")
         if fib_levels_90days['23.6%'] < current_price <= fib_levels_90days['38.2%']:
-            trade_ideas.append("[TRADE IDEA] Slightly bearish, price near 23.6% 90 days Fibonacci retracement.")
+            trade_ideas.append("[MARKET SENTIMENT] Slightly bearish, price near 23.6% 90 days Fibonacci retracement.")
         if current_price <= fib_levels_90days['23.6%']:
-            trade_ideas.append("[TRADE IDEA] Bearish, price below 23.6% 90 days Fibonacci retracement.")
+            trade_ideas.append("[MARKET SENTIMENT] Bearish, price below 23.6% 90 days Fibonacci retracement.")
 
     # RSI-based trade decision
         rsi_signal = self.rsi_trade_decision(data)
         if rsi_signal == "Bullish":
-            trade_ideas.append("[TRADE IDEA] 14-period RSI indicates oversold conditions, suggesting a bullish opportunity.")
+            trade_ideas.append("[MARKET SENTIMENT] 14-period RSI indicates oversold conditions, suggesting a bullish opportunity.")
         elif rsi_signal == "Bearish":
-            trade_ideas.append("[TRADE IDEA] 14-period RSI indicates overbought conditions, suggesting a bearish opportunity.")
+            trade_ideas.append("[MARKET SENTIMENT] 14-period RSI indicates overbought conditions, suggesting a bearish opportunity.")
 
-        # RSI 7 trade idea log
+    # RSI 7 trade idea log
         if latest_rsi_7 > 70:
-            print("[TRADE IDEA] 7-period RSI indicates overbought conditions, bearish.")
+            print("[MARKET SENTIMENT] 7-period RSI indicates overbought conditions, bearish.")
         elif latest_rsi_7 < 30:
-            print("[TRADE IDEA] 7-period RSI indicates oversold conditions, bullish.")
+            print("[MARKET SENTIMENT] 7-period RSI indicates oversold conditions, bullish.")
         else:
-            print("[TRADE IDEA] 7-period RSI is neutral, no strong signal.")
-        
-        # RSI 21 trade idea log
+            print("[MARKET SENTIMENT] 7-period RSI is neutral, no strong signal.")
+    
+    # RSI 21 trade idea log
         if latest_rsi_21 > 70:
-            print("[TRADE IDEA] 21-period RSI indicates overbought conditions, bearish.")
+            print("[MARKET SENTIMENT] 21-period RSI indicates overbought conditions, bearish.")
         elif latest_rsi_21 < 30:
-            print("[TRADE IDEA] 21-period RSI indicates oversold conditions, bullish.")
+            print("[MARKET SENTIMENT] 21-period RSI indicates oversold conditions, bullish.")
         else:
-            print("[TRADE IDEA] 21-period RSI is neutral, no strong signal.")
-        
-        # RSI convergence logic
+            print("[MARKET SENTIMENT] 21-period RSI is neutral, no strong signal.")
+    
+    # RSI convergence logic
         if latest_rsi_7 > latest_rsi_21:
-            print("[TRADE IDEA] 7-period RSI above 21-period RSI: Bullish momentum detected.")
+            print("[MARKET SENTIMENT] 7-period RSI above 21-period RSI: Bullish momentum detected.")
         elif latest_rsi_7 < latest_rsi_21:
-            print("[TRADE IDEA] 7-period RSI below 21-period RSI: Bearish momentum detected.")
+            print("[MARKET SENTIMENT] 7-period RSI below 21-period RSI: Bearish momentum detected.")
         else:
-            print("[TRADE IDEA] RSI 7 and 21 are equal: Neutral trend.")
+            print("[MARKET SENTIMENT] RSI 7 and 21 are equal: Neutral trend.")
 
     # Stochastic Oscillator decision
         stochastic_decision = self.calculate_stochastic_oscillator(data)
@@ -1204,20 +1310,48 @@ class TradingBot:
             else:
                 trade_ideas.append(f"[TRADE IDEA] Price is between {period} day support and resistance, no strong signal.")
 
-        # Example conditions (retain and ensure all logs are captured)
+    # Example conditions (retain and ensure all logs are captured)
         if current_price > data['high'].rolling(20).max().iloc[-2]:
             trade_ideas.append("[TRADE IDEA] Price breaking above 20-day high, consider buying.")
         if current_price < data['low'].rolling(20).min().iloc[-2]:
             trade_ideas.append("[TRADE IDEA] Price breaking below 20-day low, consider selling.")
 
+# ... inside generate_trade_signals() method
+        latest = data.iloc[-1]
+        current_price = latest['close']
+        atr = latest['ATR']
 
-    # ATR-based trade ideas for calls and puts
-        trade_ideas.append(f"[TRADE IDEA] For LONG CALL positions, consider a stop loss at {stop_loss_long:.2f} and take profit at {take_profit_long:.2f}.")
-        trade_ideas.append(f"[TRADE IDEA] For LONG PUT positions, consider a stop loss at {stop_loss_short:.2f} and take profit at {take_profit_short:.2f}.")
-        trade_ideas.append(f"[TRADE IDEA] For SHORT PUT positions, consider a stop loss at {stop_loss_short:.2f} and take profit at {take_profit_short:.2f}.")
-        trade_ideas.append(f"[TRADE IDEA] For SHORT CALL positions, consider a stop loss at {stop_loss_long:.2f} and take profit at {take_profit_long:.2f}.")
+# Long Call Recommendation (Bullish)
+        sl_long_call = current_price - (atr * 1.5)
+        tp_long_call = current_price + (atr * 2)
+        self.signals.append(
+            f"[TRADE IDEA] BUY LONG CALL Enter at {current_price:.2f} | "
+            f"SL: {sl_long_call:.2f} | TP: {tp_long_call:.2f} | "
+            f"Risk: {((current_price - sl_long_call)/current_price*100):.1f}% | "
+            f"Reward: {((tp_long_call - current_price)/current_price*100):.1f}%"
+        )
 
-    # Log all trade ideas
+# Long Put Recommendation (Bearish)
+        sl_long_put = current_price + (atr * 1.5)
+        tp_long_put = current_price - (atr * 2)
+        self.signals.append(
+            f"[TRADE IDEA] BUY LONG PUT Enter at {current_price:.2f} | "
+            f"SL: {sl_long_put:.2f} | TP: {tp_long_put:.2f} | "
+            f"Risk: {((sl_long_put - current_price)/current_price*100):.1f}% | "
+            f"Reward: {((current_price - tp_long_put)/current_price*100):.1f}%"
+        )
+
+
+# Log all recommendations
+        log_file = "trade_signals.log"
+        with open(log_file, "a") as f:
+            for signal in self.signals:
+                formatted_signal = self.format_message(signal)
+                print(formatted_signal)  # Print to terminal
+                f.write(formatted_signal + "\n")  # Save to file
+        self.signals.clear()
+
+        # Keep the existing return statement and final logging
         if trade_ideas:
             for idea in trade_ideas:
                 print(self.format_message(idea))
@@ -1225,35 +1359,236 @@ class TradingBot:
             print(self.format_message("[TRADE IDEA] No strong trade ideas generated based on the current analysis."))
 
         return trade_ideas
-     
+
+    def _check_momentum_alignment(self, analysis):
+        """Check if momentum indicators align across time frames."""
+        aligned = []
+        if analysis['10yr']['macd_trend'] == "Bullish": aligned.append("10yr")
+        if analysis['1yr']['macd_trend'] == "Bullish": aligned.append("1yr")
+        if analysis['3mo']['macd_trend'] == "Bullish": aligned.append("3mo")
+        
+        if len(aligned) == 3: return "Strong Bullish Confluence"
+        if len(aligned) >= 2: return "Bullish Bias"
+        if len(aligned) == 1: return "Mixed Signals"
+        return "Bearish Dominance"
+
+    def analyze_historical_trends(self, data):
+        """Analyze price trends across different time horizons (10yr, 1yr, 3mo) and compare to historical data."""
+        if len(data) < 252 * 10:  # Minimum 10 years of daily data
+            print("[MARKET DATA] Warning: Insufficient data for full historical analysis")
+            return None
+
+        # Prepare time periods
+        ten_year_data = data.copy()
+        one_year_data = data.tail(252).copy()  # 252 trading days/year
+        three_month_data = data.tail(63).copy()  # ~3 months (21 trading days/month)
+
+        # Calculate key metrics for each period
+        time_frames = {
+            '10yr': ten_year_data,
+            '1yr': one_year_data,
+            '3mo': three_month_data
+        }
+
+        analysis = {}
+        for timeframe, df in time_frames.items():
+            # Calculate moving averages using .loc to avoid SettingWithCopyWarning
+            df.loc[:, 'SMA200'] = df['close'].rolling(200).mean()
+            df.loc[:, 'SMA50'] = df['close'].rolling(50).mean()
+            
+            # Current price position relative to averages
+            current_price = df['close'].iloc[-1]
+            sma200 = df['SMA200'].iloc[-1]
+            sma50 = df['SMA50'].iloc[-1]
+            
+            # Momentum indicators
+            rsi = talib.RSI(df['close'], timeperiod=14).iloc[-1]
+            macd, _, _ = talib.MACD(df['close'])
+            
+            analysis[timeframe] = {
+                'price_vs_sma200': (current_price/sma200 - 1) * 100,
+                'price_vs_sma50': (current_price/sma50 - 1) * 100,
+                'sma50_vs_sma200': (sma50/sma200 - 1) * 100,
+                'rsi': rsi,
+                'macd_trend': "Bullish" if macd.iloc[-1] > macd.iloc[-5:-1].mean() else "Bearish",
+                'current_price': current_price,
+                'volatility': df['close'].pct_change().std() * np.sqrt(252)
+            }
+
+        # Generate trend comparison
+        trend_summary = {
+            'long_term_trend': "Bullish" if analysis['10yr']['price_vs_sma200'] > 0 else "Bearish",
+            'medium_term_trend': "Bullish" if analysis['1yr']['price_vs_sma50'] > 0 else "Bearish",
+            'short_term_trend': "Bullish" if analysis['3mo']['price_vs_sma50'] > 0 else "Bearish",
+            'momentum_confluence': self._check_momentum_alignment(analysis)
+        }
+
+        # Print formatted analysis
+        print("\n[MARKET DATA] Historical Price Patterns:")
+        for timeframe in ['10yr', '1yr', '3mo']:
+            print(f"\n--- {timeframe.upper()} ANALYSIS ---")
+            print(f"Price vs 200 SMA: {analysis[timeframe]['price_vs_sma200']:.2f}%")
+            print(f"Price vs 50 SMA: {analysis[timeframe]['price_vs_sma50']:.2f}%")
+            print(f"RSI: {analysis[timeframe]['rsi']:.1f}")
+            print(f"MACD Trend: {analysis[timeframe]['macd_trend']}")
+            print(f"Annualized Volatility: {analysis[timeframe]['volatility']:.2%}")
+
+        print("\n[MARKET DATA] Trend Summary:")
+        print(f"Long-term (10yr) Trend: {trend_summary['long_term_trend']}")
+        print(f"Medium-term (1yr) Trend: {trend_summary['medium_term_trend']}")
+        print(f"Short-term (3mo) Trend: {trend_summary['short_term_trend']}")
+        print(f"Momentum Alignment: {trend_summary['momentum_confluence']}")
+
+        # Compare candlestick movements
+        self._compare_candlestick_movements(ten_year_data, one_year_data, three_month_data)
+
+        # Compare indicator trends
+        self._compare_indicator_trends(ten_year_data, one_year_data, three_month_data)
+
+        return analysis
+
+    def _compare_candlestick_movements(self, ten_year_data, one_year_data, three_month_data):
+        """Compare candlestick movements in the last 1 year and 3 months to historical movements in the last 10 years."""
+        print("\n[MARKET DATA] Analyzing candlestick pattern significance...")
+
+        # Analyze 3-month movements vs 10-year history
+        three_month_movements = self._calculate_candlestick_movements(three_month_data)
+        ten_year_movements = self._calculate_candlestick_movements(ten_year_data)
+
+        # Find and classify matches
+        three_month_matches = self._find_matching_movements(three_month_movements, ten_year_movements)
+        bull_matches_3m = sum(1 for m in three_month_matches if m == 'Bullish')
+        bear_matches_3m = len(three_month_matches) - bull_matches_3m
+    
+        print(f"[MARKET DATA] 3-month patterns vs 10yr history: "
+            f"{colored(f'{bull_matches_3m} bullish', 'green')} | "
+            f"{colored(f'{bear_matches_3m} bearish', 'red')} | "
+            f"Dominant bias: {colored('BULLISH' if bull_matches_3m > bear_matches_3m else 'BEARISH', 'yellow' if bull_matches_3m == bear_matches_3m else 'green' if bull_matches_3m > bear_matches_3m else 'red')}")
+
+        # Analyze 1-year movements vs 10-year history
+        one_year_movements = self._calculate_candlestick_movements(one_year_data)
+        one_year_matches = self._find_matching_movements(one_year_movements, ten_year_movements)
+        bull_matches_1y = sum(1 for m in one_year_matches if m == 'Bullish')
+        bear_matches_1y = len(one_year_matches) - bull_matches_1y
+    
+        print(f"[MARKET DATA] 1-year patterns vs 10yr history: "
+            f"{colored(f'{bull_matches_1y} bullish', 'green')} | "
+            f"{colored(f'{bear_matches_1y} bearish', 'red')} | "
+            f"Dominant bias: {colored('BULLISH' if bull_matches_1y > bear_matches_1y else 'BEARISH', 'yellow' if bull_matches_1y == bear_matches_1y else 'green' if bull_matches_1y > bear_matches_1y else 'red')}")
+
+        # Add comparative analysis
+        if bull_matches_3m > bull_matches_1y:
+            print(self.format_message("[TREND ANALYSIS] Recent 3-month bullish patterns exceed 1-year trend - potential strengthening momentum"))
+        elif bear_matches_3m > bear_matches_1y:
+            print(self.format_message("[TREND ANALYSIS] Recent 3-month bearish patterns exceed 1-year trend - potential weakening momentum"))
+
+    def _calculate_candlestick_movements(self, data):
+        """Calculate candlestick movements (e.g., bullish/bearish trends) based on OHLC data."""
+        movements = []
+        for i in range(1, len(data)):
+            if data['close'].iloc[i] > data['open'].iloc[i]:
+                movements.append("Bullish")
+            elif data['close'].iloc[i] < data['open'].iloc[i]:
+                movements.append("Bearish")
+            else:
+                movements.append("Neutral")
+        return movements
+
+    def _find_matching_movements(self, recent_movements, historical_movements):
+        """Find matching candlestick movements between recent and historical data."""
+        matches = []
+        for i in range(len(recent_movements)):
+            if recent_movements[i] == historical_movements[i % len(historical_movements)]:
+                matches.append(recent_movements[i])
+        return matches
+
+    def _compare_indicator_trends(self, ten_year_data, one_year_data, three_month_data):
+        """Compare indicator trends (e.g., RSI, MACD) in the last 1 year and 3 months to historical trends in the last 10 years."""
+        print("\n[MARKET DATA] Comparing indicator trends...")
+
+        # Calculate indicator trends for each period
+        ten_year_indicators = self._calculate_indicator_trends(ten_year_data)
+        one_year_indicators = self._calculate_indicator_trends(one_year_data)
+        three_month_indicators = self._calculate_indicator_trends(three_month_data)
+
+        # Compare 3-month indicator trends to 10-year history
+        three_month_matches = self._find_matching_indicator_trends(three_month_indicators, ten_year_indicators)
+        print(f"[MARKET DATA] 3-month indicator trends matching 10-year history: {len(three_month_matches)}")
+
+        # Compare 1-year indicator trends to 10-year history
+        one_year_matches = self._find_matching_indicator_trends(one_year_indicators, ten_year_indicators)
+        print(f"[MARKET DATA] 1-year indicator trends matching 10-year history: {len(one_year_matches)}")
+
+    def _calculate_indicator_trends(self, data):
+        """Calculate indicator trends (e.g., RSI, MACD) for a given dataset."""
+        trends = {
+            'rsi': talib.RSI(data['close'], timeperiod=14).iloc[-1],
+            'macd': talib.MACD(data['close'])[0].iloc[-1],
+            'sma50_vs_sma200': (data['close'].rolling(50).mean().iloc[-1] / data['close'].rolling(200).mean().iloc[-1] - 1) * 100
+        }
+        return trends
+
+    def _find_matching_indicator_trends(self, recent_trends, historical_trends):
+        """Find matching indicator trends between recent and historical data."""
+        matches = []
+        for key in recent_trends:
+            if recent_trends[key] > historical_trends[key]:
+                matches.append(f"Bullish {key}")
+            elif recent_trends[key] < historical_trends[key]:
+                matches.append(f"Bearish {key}")
+            else:
+                matches.append(f"Neutral {key}")
+        return matches
+  
+    def calculate_indicators(self, data):
+        """Compute key indicators for options trading on provided data."""
+        data['SMA20'] = talib.SMA(data['close'], timeperiod=20)
+        data['SMA50'] = talib.SMA(data['close'], timeperiod=50)
+        data['RSI'] = talib.RSI(data['close'], timeperiod=14)
+        data['ATR'] = talib.ATR(data['high'], data['low'], data['close'], timeperiod=14)
+        macd, macd_signal, _ = talib.MACD(data['close'], fastperiod=12, slowperiod=26, signalperiod=9)
+        data['MACD'] = macd
+        data['MACD_Signal'] = macd_signal
+        upper, middle, lower = talib.BBANDS(data['close'], timeperiod=20, nbdevup=2, nbdevdn=2)
+        data['UpperBB'] = upper
+        data['LowerBB'] = lower
+        return data
+
     def start_trading(self):
         """Main function to run the trading bot."""
         while True:
-            print("[LOG] Fetching daily data...")
             self.data_daily = self.fetch_data("daily")
 
             if self.data_daily is not None:
                 trend = self.determine_market_trend(self.data_daily)
-                print(f"[LOG] Market Trend: {trend}")
+                print(f"[MARKET DATA] Market Trend: {trend}")
 
-            # Run Fibonacci and Bollinger Bands analysis
-            self.trade_idea(self.data_daily)
+                # Fundamental Analysis
+                fundamental_data = self.fetch_fundamental_data()
+                if fundamental_data:
+                    self.log_fundamentals(fundamental_data)
 
-        # Interactive analysis after processing the provided tickers
-        while True:
-            another = input("Do you want to analyze another ticker? (yes/no): ").strip().lower()
-            if another != "yes":
+                # Run Fibonacci and Bollinger Bands analysis
+                self.trade_idea(self.data_daily)
+            else:
+                print("[ERROR] Failed to fetch daily data. Skipping analysis.")
+
+            # Ask user for another ticker or exit
+            another_ticker = input("Do you want to analyze another ticker? (yes/no): ").strip().lower()
+            if another_ticker == "yes":
+                self.ticker = input("Enter the new ticker symbol: ")
+                # Fetch new data immediately for the new ticker
+                print("[LOG] Fetching data for the new ticker...")
+                self.data_daily = self.fetch_data("daily")
+                if self.data_daily is not None:
+                    trend = self.determine_market_trend(self.data_daily)
+                    print(f"[LOG] Market Trend: {trend}")
+                    self.trade_idea(self.data_daily)
+                else:
+                    print("[ERROR] Failed to fetch data for the new ticker.")
+            else:
+                print("[LOG] Exiting...")
                 break
-            new_ticker = input("Enter the new ticker symbol: ")
-            print(f"\n======== Ticker: {new_ticker} ========")
-            self.ticker = new_ticker
-            data = self.fetch_data("daily")
-            if data is None:
-                print(f"[ERROR] Could not fetch data for ticker {new_ticker}.")
-                continue
-            trend = self.determine_market_trend(data)
-            print(f"[LOG] Market Trend: {trend}")
-            self.trade_idea(data)
 
 # Modified example usage at bottom of file:
 if __name__ == "__main__":
