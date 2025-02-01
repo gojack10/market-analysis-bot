@@ -1210,7 +1210,7 @@ class TradingBot:
     
     # Bullish conditions
         if current_price > current_vwap:
-            trade_ideas.append("[TRADE IDEA] Price above VWAP â€" Look for bullish pullbacks.")
+            trade_ideas.append("[TRADE IDEA] Price above VWAP - Look for bullish pullbacks.")
         # Check if VWAP is acting as support
             if data['low'].iloc[-1] <= current_vwap:
                 trade_ideas.append("[TRADE IDEA] VWAP acting as support. Confirm with RSI/MACD.")
@@ -1220,7 +1220,7 @@ class TradingBot:
     
     # Bearish conditions
         elif current_price < current_vwap:
-            trade_ideas.append("[TRADE IDEA] Price below VWAP â€" Look for bearish rejections.")
+            trade_ideas.append("[TRADE IDEA] Price below VWAP - Look for bearish rejections.")
         # Check if VWAP is acting as resistance
             if data['high'].iloc[-1] >= current_vwap:
                 trade_ideas.append("[TRADE IDEA] VWAP acting as resistance. Confirm with RSI/MACD.")
