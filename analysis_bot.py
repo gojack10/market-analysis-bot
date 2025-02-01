@@ -49,8 +49,8 @@ class TradingBot:
         self.macd_oversold_zone = None   # To store MACD oversold zone
         self.swing_indicators = {}  # To store swing indicator states
         self.signals = []  # Initialize trade signals list
-        # Initialize rate limiter: 5 requests per minute
-        self.rate_limiter = RateLimiter(max_requests=5, time_window=60)
+        # Initialize rate limiter: 10 requests per minute
+        self.rate_limiter = RateLimiter(max_requests=10, time_window=60)
 
     def format_message(self, message):
         """Format 'bullish', 'bearish', 'call', 'calls', 'put', 'puts' with appropriate colors."""
@@ -1239,31 +1239,40 @@ class TradingBot:
             # Run Fibonacci and Bollinger Bands analysis
             self.trade_idea(self.data_daily)
 
-        # Ask user for another ticker or exit
-            another_ticker = input("Do you want to analyze another ticker? (yes/no): ").strip().lower()
-            if another_ticker == "yes":
-                self.ticker = input("Enter the new ticker symbol: ")
-            # Fetch new data immediately for the new ticker
-                print("[LOG] Fetching data for the new ticker...")
-                self.data_daily = self.fetch_data("daily")
-                if self.data_daily is not None:
-                    trend = self.determine_market_trend(self.data_daily)
-                    print(f"[LOG] Market Trend: {trend}")
-                    self.trade_idea(self.data_daily)  # Run the trade idea analysis again for the new ticker
-            else:
-                print("[LOG] Exiting...")
+        # Interactive analysis after processing the provided tickers
+        while True:
+            another = input("Do you want to analyze another ticker? (yes/no): ").strip().lower()
+            if another != "yes":
                 break
+            new_ticker = input("Enter the new ticker symbol: ")
+            print(f"\n======== Ticker: {new_ticker} ========")
+            self.ticker = new_ticker
+            data = self.fetch_data("daily")
+            if data is None:
+                print(f"[ERROR] Could not fetch data for ticker {new_ticker}.")
+                continue
+            trend = self.determine_market_trend(data)
+            print(f"[LOG] Market Trend: {trend}")
+            self.trade_idea(data)
 
 # Modified example usage at bottom of file:
 if __name__ == "__main__":
-    ticker = input("Enter the ticker symbol: ")
+    tickers_input = input("Enter the ticker symbol(s) (comma separated for multiple): ")
+    tickers = [t.strip() for t in tickers_input.split(",")]
     
-    # Initialize the TradingBot class (no need to pass api_key)
+    # Initialize the TradingBot class
     bot = TradingBot()
     
-    # Set the ticker dynamically
-    bot.ticker = ticker
-    
-    # Validate the API key and start trading
+    # Validate the API key
     bot.validate_key()
-    bot.start_trading()
+    
+    for t in tickers:
+        print(f"\n======== Ticker: {t} ========")
+        bot.ticker = t
+        data = bot.fetch_data("daily")
+        if data is None:
+            print(f"[ERROR] Could not fetch data for ticker {t}.")
+            continue
+        trend = bot.determine_market_trend(data)
+        print(f"[LOG] Market Trend: {trend}")
+        bot.trade_idea(data)
