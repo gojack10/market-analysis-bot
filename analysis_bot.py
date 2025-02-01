@@ -1184,10 +1184,10 @@ class TradingBot:
 
         print(f"[INDICATOR] Current ATR: {atr}")
 
-        print("[INDICATOR] Fibonacci Levels:")
+        print("[INDICATOR] (1 year) Fibonacci Levels:")
         for level, price in yearly_fib_levels.items():
             print(f"{level}: {price}")
-        print("[INDICATOR] Fibonacci Levels:")
+        print("[INDICATOR] (90 days) Fibonacci Levels:")
         for level, price in fib_levels_90days.items():
             print(f"{level}: {price}")
 
