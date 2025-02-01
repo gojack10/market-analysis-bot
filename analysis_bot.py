@@ -1325,7 +1325,7 @@ class TradingBot:
         sl_long_call = current_price - (atr * 1.5)
         tp_long_call = current_price + (atr * 2)
         self.signals.append(
-            f"[TRADE IDEA] BUY LONG CALL Enter at {current_price:.2f} | "
+            f"[TRADE IDEA] LONG CALL Enter at {current_price:.2f} | "
             f"SL: {sl_long_call:.2f} | TP: {tp_long_call:.2f} | "
             f"Risk: {((current_price - sl_long_call)/current_price*100):.1f}% | "
             f"Reward: {((tp_long_call - current_price)/current_price*100):.1f}%"
@@ -1335,7 +1335,7 @@ class TradingBot:
         sl_long_put = current_price + (atr * 1.5)
         tp_long_put = current_price - (atr * 2)
         self.signals.append(
-            f"[TRADE IDEA] BUY LONG PUT Enter at {current_price:.2f} | "
+            f"[TRADE IDEA] LONG PUT Enter at {current_price:.2f} | "
             f"SL: {sl_long_put:.2f} | TP: {tp_long_put:.2f} | "
             f"Risk: {((sl_long_put - current_price)/current_price*100):.1f}% | "
             f"Reward: {((current_price - tp_long_put)/current_price*100):.1f}%"
