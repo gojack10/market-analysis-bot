@@ -970,7 +970,139 @@ class TradingBot:
 
     # Return the latest MACD value
         return latest_macd
+
+    def calculate_1hour_fibonacci_retracement(self, data):
+        """Calculate Fibonacci retracement levels based on recent 1-hour swing points."""
+        recent_data = data.tail(24*5)  # Last 5 days of hourly data
+        
+        # Find swing high and low
+        swing_high = recent_data['high'].max()
+        swing_low = recent_data['low'].min()
+        diff = swing_high - swing_low
+
+        # Determine trend direction
+        last_close = recent_data['close'].iloc[-1]
+        uptrend = last_close > recent_data['close'].iloc[-24]  # Compare to 24 periods ago (1 day)
+
+        if uptrend:
+            levels = {
+                '23.6%': swing_high - 0.236 * diff,
+                '38.2%': swing_high - 0.382 * diff,
+                '50.0%': swing_high - 0.5 * diff,
+                '61.8%': swing_high - 0.618 * diff,
+                'swing_low': swing_low,
+                'swing_high': swing_high
+            }
+        else:
+            levels = {
+                '23.6%': swing_low + 0.236 * diff,
+                '38.2%': swing_low + 0.382 * diff,
+                '50.0%': swing_low + 0.5 * diff,
+                '61.8%': swing_low + 0.618 * diff,
+                'swing_low': swing_low,
+                'swing_high': swing_high
+            }
+        return levels, uptrend
+
+    def fib_strategy_1hour(self, data):
+        """Implement Fibonacci Retracement Strategy for 1-hour chart"""
+        current_price = data['close'].iloc[-1]
+        fib_levels, trend_direction = self.calculate_1hour_fibonacci_retracement(data)
+        
+        # Calculate indicators
+        data['EMA9'] = talib.EMA(data['close'], timeperiod=9)
+        data['EMA21'] = talib.EMA(data['close'], timeperiod=21)
+        data['RSI'] = talib.RSI(data['close'], timeperiod=14)
+        
+        signals = []
+        entry_level = None
+        stop_loss = None
+        profit_targets = []
+
+        # Trend and Level Analysis
+        if trend_direction:  # Uptrend - Look for Call entries
+            for level in ['38.2%', '50.0%', '61.8%']:
+                fib_value = fib_levels[level]
+                if self._is_near_level(current_price, fib_value):
+                    # Bullish confirmation checks
+                    if (data['close'].iloc[-1] > data['open'].iloc[-1] and  # Bullish candle
+                        data['RSI'].iloc[-1] > 40 and
+                        data['EMA9'].iloc[-1] > data['EMA21'].iloc[-1]):
+                        
+                        entry_level = fib_value
+                        stop_loss = fib_levels['swing_low'] - (0.01 * current_price)  # Buffer
+                        profit_targets = [
+                            fib_levels['23.6%'],
+                            fib_levels['swing_high']
+                        ]
+                        signals.append(self.format_message(
+                            f"[1 HOUR FIB STRATEGY] CALL Entry at {level} level ({entry_level:.2f}) | "
+                            f"SL: {stop_loss:.2f} | Targets: {profit_targets[0]:.2f}, {profit_targets[1]:.2f}"
+                        ))
+                        break
+
+        else:  # Downtrend - Look for Put entries
+            for level in ['38.2%', '50.0%', '61.8%']:
+                fib_value = fib_levels[level]
+                if self._is_near_level(current_price, fib_value):
+                    # Bearish confirmation checks
+                    if (data['close'].iloc[-1] < data['open'].iloc[-1] and  # Bearish candle
+                        data['RSI'].iloc[-1] < 60 and
+                        data['EMA9'].iloc[-1] < data['EMA21'].iloc[-1]):
+                        
+                        entry_level = fib_value
+                        stop_loss = fib_levels['swing_high'] + (0.01 * current_price)  # Buffer
+                        profit_targets = [
+                            fib_levels['23.6%'],
+                            fib_levels['swing_low']
+                        ]
+                        signals.append(self.format_message(
+                            f"[1 HOUR FIB STRATEGY] PUT Entry at {level} level ({entry_level:.2f}) | "
+                            f"SL: {stop_loss:.2f} | Targets: {profit_targets[0]:.2f}, {profit_targets[1]:.2f}"
+                        ))
+                        break
+
+        # Log important levels
+        print(self.format_message(
+            f"[1 HOUR FIB STRATEGY] Key Levels | Swing High: {fib_levels['swing_high']:.2f} | "
+            f"Swing Low: {fib_levels['swing_low']:.2f} | Trend: {'Uptrend' if trend_direction else 'Downtrend'}"
+        ))
+        for level, value in fib_levels.items():
+            if '%' in level:
+                print(f"[1 HOUR FIB STRATEGY] {level}: {value:.2f}")
+
+        if not signals:
+            signals.append("[1 HOUR FIB STRATEGY] No valid entries found at Fibonacci levels")
     
+        return signals
+
+    def generate_trade_signals(self, data):
+        """Generate and log trade signals, ensuring proper order of logs."""
+        trade_ideas = self.trade_idea(data)  # Generate trade ideas first
+        fib_signals = self.fib_strategy_1hour(data)  # Generate Fibonacci signals second
+
+        # Print trade ideas first
+        if trade_ideas:
+            for idea in trade_ideas:
+                print(self.format_message(idea))
+        else:
+            print(self.format_message("[TRADE IDEA] No strong trade ideas generated based on the current analysis."))
+
+        # Print Fibonacci strategy logs after trade ideas
+        if fib_signals:
+            for signal in fib_signals:
+                print(self.format_message(signal))
+
+    def _log_fib_levels(self, fib_levels):
+        """Helper to log Fibonacci levels"""
+        print(self.format_message(
+            f"[1 HOUR FIB STRATEGY] Key Levels | Swing High: {fib_levels['swing_high']:.2f} | "
+            f"Swing Low: {fib_levels['swing_low']:.2f}"
+        ))
+        for level, value in fib_levels.items():
+            if '%' in level:
+                print(f"[1 HOUR FIB STRATEGY] {level}: {value:.2f}")
+
     def trade_idea(self, data):
         """Determine a trade idea based on Fibonacci retracement, Bollinger Bands, RSI, MACD, and ATR."""
         self.analyze_historical_trends(data)
@@ -1559,7 +1691,16 @@ class TradingBot:
         """Main function to run the trading bot."""
         while True:
             self.data_daily = self.fetch_data("daily")
+            self.data_hourly = self.fetch_data("hourly")
 
+            if self.data_hourly is not None:
+                try:
+                    fib_signals = self.fib_strategy_1hour(self.data_hourly)
+                    for signal in fib_signals:
+                        print(self.format_message(signal))
+                except Exception as e:
+                    print(f"[ERROR] Failed to run 1 hour Fib strategy: {str(e)}")
+                    
             if self.data_daily is not None:
                 trend = self.determine_market_trend(self.data_daily)
                 print(f"[MARKET DATA] Market Trend: {trend}")
