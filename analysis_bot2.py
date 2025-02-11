@@ -5,12 +5,14 @@ import requests
 import pygame
 import sys
 from threading import Thread
+from datetime import datetime
+from pytz import timezone
 import talib as ta
 
 # Audio Configuration
 THEME_SOUND = 'data/audio/themebot.mp3'
-CALL_SOUND = 'data/audio/call_signal.mp3'
-PUT_SOUND = 'data/audio/put_signal.mp3'
+CALL_SOUND = 'data/audio/CALLS.mp3'
+PUT_SOUND = 'data/audio/PUTS.mp3'
 
 # Initialize pygame mixer
 pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
@@ -37,12 +39,16 @@ def play_signal_sound(symbol, signal_type):
 API_KEY = 'F2B18RC451038ETB'
 SYMBOLS = ['NVDA', 'AAPL']
 INTERVAL = '5min'
-URL_TEMPLATE = "https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol={symbol}&interval={interval}&apikey={api_key}"
+URL_TEMPLATE = "https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol={symbol}&interval={interval}&entitlement=realtime&apikey={api_key}"
 
 def fetch_realtime_data(symbol):
-    """Fetch real-time 5-minute intraday data for a given symbol from Alpha Vantage API"""
+    """Fetch real-time 5-minute intraday data with correct timezone handling"""
     try:
-        url = URL_TEMPLATE.format(symbol=symbol, interval=INTERVAL, api_key=API_KEY)
+        url = URL_TEMPLATE.format(
+            symbol=symbol,
+            interval=INTERVAL,
+            api_key=API_KEY
+        )
         response = requests.get(url)
         data = response.json()
 
@@ -58,11 +64,15 @@ def fetch_realtime_data(symbol):
             "4. close": "close",
             "5. volume": "volume"
         })
-        df.index = pd.to_datetime(df.index)
+
+        # Correct timezone handling
+        df.index = pd.to_datetime(df.index).tz_localize('America/New_York')
         df = df.astype(float)
+        df.sort_index(inplace=True)
         return df
+        
     except Exception as e:
-        print(f"Exception fetching data for {symbol}: {e}")
+        print(f"Error fetching data for {symbol}: {e}")
         return None
 
 def calculate_indicators(df):
@@ -134,45 +144,8 @@ class RealtimeStrategyEngine:
             df['Sell_Strategy3'] = (df['Signal_VWAP'] == -1) & (df['Signal_OBV'] == -1) & (df['Signal_Fib'] == 1)
         return df
 
-def monitor_strategies():
-    """Main monitoring loop with continuous theme music"""
-    # Start theme music in background thread
-    Thread(target=play_theme_loop, daemon=True).start()
-    
-    engine = RealtimeStrategyEngine()
-    
-    while True:
-        try:
-            # [Keep all your existing data fetching and processing code here]
-            
-            # When signals occur, use play_signal_sound instead of beep
-            print(f"\n=== Market Update @ {timestamp} ===")
-            for strategy in [1, 2, 3]:
-                try:
-                    buy_signal = latest.get(f'Buy_Strategy{strategy}', False)
-                    sell_signal = latest.get(f'Sell_Strategy{strategy}', False)
-                    
-                    if buy_signal:
-                        print(f"STRATEGY {strategy}: BUY CALLS")
-                        play_signal_sound('call')
-                    if sell_signal:
-                        print(f"STRATEGY {strategy}: BUY PUTS")
-                        play_signal_sound('put')
-                except Exception as e:
-                    print(f"Signal processing error ({strategy}): {e}")
-            
-            time.sleep(5)
-
-        except KeyboardInterrupt:
-            print("\nExiting...")
-            pygame.mixer.quit()
-            sys.exit(0)
-        except Exception as e:
-            print(f"Main loop error: {e}")
-            time.sleep(10)
-
 def main():
-    """Main loop to fetch data and apply trading logic continuously for multiple symbols."""
+    """Main loop with descriptive market update messages and corrected timezone handling"""
     Thread(target=play_theme_loop, daemon=True).start()
     engine = RealtimeStrategyEngine()
     
@@ -180,20 +153,33 @@ def main():
         for symbol in SYMBOLS:
             df = fetch_realtime_data(symbol)
             if df is not None and len(df) > 20:
-                df.index = pd.to_datetime(df.index, utc=True)  # Ensure index is datetime and in UTC
-                df = df.sort_index()  # Sort by datetime index
-                
-                latest_time = df.index[-1]  # Get the latest timestamp
-                
+                # Ensure the DataFrame is sorted by time
+                df = df.sort_index()
 
-                formatted_time = latest_time.strftime("%Y-%m-%d %H:%M:%S")  # Correct format
+                # Calculate technical indicators and Fibonacci levels
+                df = calculate_indicators(df)
+                df = calculate_fibonacci_levels(df)
                 
-                print(f"\n=== Market Update @ {formatted_time} for {symbol} ===")  # Correct output
+                # Get the latest data point
+                latest = df.iloc[-1]
+                timestamp = latest.name.strftime('%Y-%m-%d %H:%M:%S')
                 
+                # Print a more descriptive market update message
+                print(f"\n=== Market Update for {symbol} ===")
+                print(f"Timestamp: {timestamp}")
+                print(f"Data points received: {len(df)}")
+                print(f"Latest Close Price: {latest['close']:.2f}")
+                if 'RSI' in latest:
+                    print(f"Latest RSI: {latest['RSI']:.2f}")
+                if 'MACD' in latest and 'MACD_Signal' in latest:
+                    print(f"Latest MACD: {latest['MACD']:.4f} | MACD Signal: {latest['MACD_Signal']:.4f}")
+
+                # Generate trading signals using three strategies
                 df = engine.generate_signals_strategy1(df)
                 df = engine.generate_signals_strategy2(df)
                 df = engine.generate_signals_strategy3(df)
                 
+                # Check for buy or sell signals and play the corresponding audio
                 for strategy in [1, 2, 3]:
                     buy_signal = df.iloc[-1].get(f'Buy_Strategy{strategy}', False)
                     sell_signal = df.iloc[-1].get(f'Sell_Strategy{strategy}', False)
@@ -205,7 +191,7 @@ def main():
                         print(f"{symbol} - STRATEGY {strategy}: BUY PUTS")
                         play_signal_sound(symbol, 'put')
         
-        time.sleep(5)  # Wait 5 seconds before fetching new data
+        time.sleep(5)
 
 if __name__ == "__main__":
     main()
