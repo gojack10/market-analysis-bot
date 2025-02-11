@@ -121,7 +121,7 @@ def backtest(df, buy_column, sell_column, long_sl_multiplier, long_tp_multiplier
     return trades
 
 # Execute Strategy
-file_path = 'AAPL.csv'
+file_path = 'data/csv/AAPL1.csv'  # Updated path to new CSV location
 data = fetch_data_from_csv(file_path)
 data = calculate_indicators(data)
 data = calculate_fibonacci_levels(data)

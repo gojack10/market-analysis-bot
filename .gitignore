@@ -49,3 +49,7 @@ project-info.md
 project-timeline.md
 .gitignore
 trade_signals.log
+testing/
+.python-version
+uv.lock
+pyproject.toml

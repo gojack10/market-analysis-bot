@@ -5,9 +5,6 @@ FROM python:3.13-rc-slim
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-# Add a default value for ALPHA_VANTAGE_API_KEY that will be overridden at runtime
-ENV ALPHA_VANTAGE_API_KEY="default_value_replace_at_runtime"
-
 # Set the working directory inside the container
 WORKDIR /app
 
@@ -50,4 +47,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Command to run your Python script
-CMD ["python", "analysis_bot.py"] 
+CMD ["python", "analysis_bot2.py"] 

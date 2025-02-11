@@ -8,9 +8,9 @@ from threading import Thread
 import talib as ta
 
 # Audio Configuration
-THEME_SOUND = 'themebot.mp3'
-CALL_SOUND = 'call_signal.mp3'
-PUT_SOUND = 'put_signal.mp3'
+THEME_SOUND = 'data/audio/themebot.mp3'
+CALL_SOUND = 'data/audio/call_signal.mp3'
+PUT_SOUND = 'data/audio/put_signal.mp3'
 
 # Initialize pygame mixer
 pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
