@@ -49,23 +49,7 @@ if that doesn't work, you might need to check where you extracted the folder. ty
 
 *you can use ur fav llm (chatpgt / deepseek / claude) to help you troubleshoot finding the correct `cd` command if u are struggling*
 
-### 5. set up environment variables
-you have two options for setting up your alpha vantage api key:
-
-option 1 - using a .env file:
-1. go to [Alpha Vantage](https://www.alphavantage.co/support/#api-key)
-2. sign up for a free api key
-3. copy the key they give you
-4. in your terminal, type (replace `YOUR_KEY_HERE` with the key you copied):
-```bash
-echo "ALPHA_VANTAGE_API_KEY=YOUR_KEY_HERE" > .env
-```
-
-This should work if your terminal in the market-analysis-bot directory, from your previous cd command
-
-option 2 - you can pass the key directly when running, more annoying but still works (see run commands below)
-
-### 6. build and run the bot
+### 5. build and run the bot
 
 first, build the image:
 ```bash
@@ -74,7 +58,7 @@ docker build -t market-analysis-bot:3.13 .
 this will take about a few minutes. you'll see lots of text - ur basically a hacker now.
 when it's done, check the images tab in docker desktop, you should see `market-analysis-bot` (about 1gb).
 
-### 7. run the bot in your native terminal (recommended, u can still use the command in docker desktop terminal if u want)
+### 6. run the bot in your native terminal (recommended, u can still use the command in docker desktop terminal if u want)
 
 it's better to run the bot in your system's native terminal for better output viewing:
 
@@ -94,16 +78,9 @@ for mac:
 cd ~/Downloads/market-analysis-bot
 ```
 
-then run the bot using one of these commands:
-
-if you created a .env file:
+then run the bot:
 ```bash
-docker run -it --rm --env-file .env market-analysis-bot:3.13
-```
-
-or pass your api key directly (if you skipped the echo .env part in step 5):
-```bash
-docker run -it --rm -e ALPHA_VANTAGE_API_KEY=your_key_here market-analysis-bot:3.13
+docker run -it --rm market-analysis-bot:3.13
 ```
 
 that's it the bot should now be running
@@ -119,11 +96,6 @@ if docker gives errors:
 - make sure docker desktop is running (green light)
 - try restarting docker desktop
 - make sure you're signed in
-
-if the bot doesn't work:
-- check your api key in the .env file or try passing it directly
-- make sure you didn't miss any steps
-- try building the image again, delete in docker desktop (trash icon on the right) and start over
 
 ## for developers
 
@@ -145,7 +117,6 @@ we've added default environment variables in the dockerfile:
 ```dockerfile
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
-ENV ALPHA_VANTAGE_API_KEY="default_value_replace_at_runtime"
 ```
 
 ## clean up docker stuff

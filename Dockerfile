@@ -8,12 +8,14 @@ ENV PYTHONUNBUFFERED=1 \
 # Set the working directory inside the container
 WORKDIR /app
 
-# Install system dependencies (including autotools-dev for updated config.guess/sub)
+# Install system dependencies (including autotools-dev and libglib2.0-0)
 RUN apt-get update && apt-get install -y \
     wget \
     build-essential \
     autotools-dev \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
+
 
 # Build & install TA-Lib from source, copying modern config.guess/config.sub
 RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz \
