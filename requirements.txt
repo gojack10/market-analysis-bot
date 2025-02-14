@@ -4,7 +4,6 @@ pygame
 pytz
 Requests
 rich
-TA-Lib
 Flask
 Flask-SocketIO
 eventlet
