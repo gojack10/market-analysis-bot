@@ -1,1 +1,1 @@
-web: python trade_server.py
+web: gunicorn --worker-class eventlet -w 1 trade_server:app
