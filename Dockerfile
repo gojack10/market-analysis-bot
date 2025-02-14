@@ -8,7 +8,7 @@ ENV PYTHONUNBUFFERED=1 \
 # Set the working directory inside the container
 WORKDIR /app
 
-# Install system dependencies (including autotools-dev and libglib2.0-0)
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     wget \
     build-essential \
@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Build & install TA-Lib from source, copying modern config.guess/config.sub
+# Build & install TA-Lib from source
 RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz \
     && tar -xvzf ta-lib-0.4.0-src.tar.gz \
     && cd ta-lib/ \
@@ -28,33 +28,33 @@ RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz \
     && cd .. \
     && rm -rf ta-lib-0.4.0-src.tar.gz ta-lib/
 
-# Verify TA-Lib installation
-RUN ls -la /usr/include/ta-lib || echo "TA-Lib headers not found in /usr/include/ta-lib" \
-    && ls -la /usr/lib/libta_lib* || echo "TA-Lib library not found in /usr/lib"
+# Verify where TA-Lib is installed
+RUN ls -la /usr/include/ta-lib || echo "TA-Lib headers not in /usr/include/ta-lib" \
+    && ls -la /usr/local/include/ta-lib || echo "TA-Lib headers not in /usr/local/include/ta-lib" \
+    && ls -la /usr/lib/libta_lib* || ls -la /usr/local/lib/libta_lib* || echo "TA-Lib library not found"
 
-# Create symlink and update linker cache
+# Create symlink (if needed) and update linker cache
 RUN if [ -f /usr/lib/libta_lib.so ]; then \
       ln -s /usr/lib/libta_lib.so /usr/lib/libta-lib.so; \
+    elif [ -f /usr/local/lib/libta_lib.so ]; then \
+      ln -s /usr/local/lib/libta_lib.so /usr/local/lib/libta-lib.so; \
     fi \
     && ldconfig
 
-# Set TA-Lib environment variables for Python wrapper
-ENV TA_LIBRARY_PATH=/usr/lib \
-    TA_INCLUDE_PATH=/usr/include
+# Set TA-Lib environment variables for the Python wrapper
+# (Adjust these if your verification step shows headers/libraries in /usr/local)
+ENV TA_LIBRARY_PATH=/usr/local/lib \
+    TA_INCLUDE_PATH=/usr/local/include
 
-# Verify environment variables
-RUN echo "TA_LIBRARY_PATH=$TA_LIBRARY_PATH" \
-    && echo "TA_INCLUDE_PATH=$TA_INCLUDE_PATH"
-
-# Copy only requirements first (for better caching)
+# Copy only requirements first for better caching
 COPY requirements.txt .
 
-# Install Python dependencies with verbose output for debugging
-RUN pip install --no-cache-dir -v ta-lib && \
+# Install Python dependencies (ensure TA_* vars are active during build)
+RUN TA_LIBRARY_PATH=/usr/local/lib TA_INCLUDE_PATH=/usr/local/include pip install --no-cache-dir -v ta-lib && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of your project files into the container
 COPY . .
 
 # Command to run your Python script
-CMD ["python", "trade_server.py"] 
+CMD ["python", "trade_server.py"]
