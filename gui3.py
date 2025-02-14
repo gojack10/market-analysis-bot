@@ -16,9 +16,17 @@ from threading import Thread, Lock
 from datetime import datetime
 import socketio
 import time
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Configure rich console
 console = Console()
+
+# Socket.IO server URL from environment variable
+TRADE_SERVER_URL = os.getenv('TRADE_SERVER_URL', 'http://localhost:8000')
 
 # Custom color styles
 STYLES = {
@@ -94,16 +102,16 @@ def on_new_trade(message):
 
 # Connect to trade server
 try:
-    sio.connect('http://localhost:8000', transports=['websocket'])
+    sio.connect(TRADE_SERVER_URL, transports=['websocket'])
 except Exception as e:
-    print(f"Could not connect to trade server: {e}")
+    print(f"Could not connect to trade server at {TRADE_SERVER_URL}: {e}")
     with log_lock:
         log_buffer.append(LogRecord(
             name="socketio",
             level=logging.ERROR,
             pathname="",
             lineno=0,
-            msg=f"Failed to connect to trade server: {e}",
+            msg=f"Failed to connect to trade server at {TRADE_SERVER_URL}: {e}",
             args=(),
             exc_info=None,
             created=time.time()

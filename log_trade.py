@@ -10,13 +10,17 @@ load_dotenv()
 # Initialize SocketIO client
 sio = socketio.Client()
 
+# Get server URL from environment variable
+TRADE_SERVER_URL = os.getenv('TRADE_SERVER_URL', 'http://localhost:8000')
+
 def log_trade():
     try:
         # Connect to the server with explicit transport setting
-        sio.connect('http://localhost:8000', transports=['websocket'])
+        sio.connect(TRADE_SERVER_URL, transports=['websocket'])
         
         # Get trade details from user
         print("\n=== Trade Logger ===")
+        print(f"Connecting to: {TRADE_SERVER_URL}")
         trade_type = input("Enter trade type (call/put): ").strip().upper()
         exp_date = input("Enter expiration date (e.g., 2-14): ").strip()
         strike_price = input("Enter strike price: ").strip()
@@ -47,8 +51,8 @@ def log_trade():
         time.sleep(1)
         
     except Exception as e:
-        print(f"Error: {e}")
-        print("Make sure the trade server is running (python trade_server.py)")
+        print(f"Error connecting to {TRADE_SERVER_URL}: {e}")
+        print("Make sure the trade server is running and the TRADE_SERVER_URL is correct")
     
     finally:
         if sio.connected:
