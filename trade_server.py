@@ -16,7 +16,13 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 def handle_new_trade(data):
     """Handle new trade broadcasts."""
     try:
-        message = f"{data.get('username', 'unknown')} NEW TRADE - {data.get('tradeType', '')} {data.get('expDate','')} @ {data.get('strikePrice','')}"
+        # Build message including the ticker so that it logs as: 
+        # "jack NEW TRADE - NVDA CALL 2-14 @ 205"
+        message = (
+            f"{data.get('username', 'unknown')} NEW TRADE - "
+            f"{data.get('ticker', 'unknown')} {data.get('tradeType', '')} "
+            f"{data.get('expDate', '')} @ {data.get('strikePrice', '')}"
+        )
         print(message)  # Log to server console
         emit("new_trade", message, broadcast=True)  # Broadcast to all connected clients
     except Exception as e:
@@ -34,4 +40,4 @@ def handle_disconnect():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
-    socketio.run(app, host="0.0.0.0", port=port, debug=False) 
+    socketio.run(app, host="0.0.0.0", port=port, debug=False)

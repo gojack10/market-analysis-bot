@@ -144,13 +144,25 @@ class RealtimeStrategyEngine:
             df['Sell_Strategy3'] = (df['Signal_VWAP'] == -1) & (df['Signal_OBV'] == -1) & (df['Signal_Fib'] == 1)
         return df
 
+def get_user_ticker():
+    """Get user input for ticker selection"""
+    while True:
+        ticker = input("Enter ticker (NVDA or AAPL): ").upper()
+        if ticker in ['NVDA', 'AAPL']:
+            return [ticker]  # Return as a list for compatibility
+        print("Invalid ticker. Please enter either NVDA or AAPL.")
+
 def main():
     """Main loop with descriptive market update messages and corrected timezone handling"""
     Thread(target=play_theme_loop, daemon=True).start()
     engine = RealtimeStrategyEngine()
     
+    # Get user input for ticker
+    symbols = get_user_ticker()
+    print(f"\nStarting analysis for {symbols[0]}...")
+    
     while True:
-        for symbol in SYMBOLS:
+        for symbol in symbols:  # Using the user-selected ticker
             df = fetch_realtime_data(symbol)
             if df is not None and len(df) > 20:
                 # Ensure the DataFrame is sorted by time
