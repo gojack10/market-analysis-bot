@@ -1,0 +1,1 @@
+web: python trade_server.py

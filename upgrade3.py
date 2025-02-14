@@ -10,9 +10,9 @@ from pytz import timezone
 import talib as ta
 
 # Audio Configuration
-THEME_SOUND = 'data/audio/themebot.mp3'
-CALL_SOUND = 'data/audio/CALLS.mp3'
-PUT_SOUND = 'data/audio/PUTS.mp3'
+THEME_SOUND = 'themebot.mp3'
+CALL_SOUND = 'CALLS.mp3'
+PUT_SOUND = 'PUTS.mp3'
 
 # Initialize pygame mixer
 pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
@@ -168,11 +168,6 @@ def main():
                 print(f"\n=== Market Update for {symbol} ===")
                 print(f"Timestamp: {timestamp}")
                 print(f"Data points received: {len(df)}")
-                print(f"Latest Close Price: {latest['close']:.2f}")
-                if 'RSI' in latest:
-                    print(f"Latest RSI: {latest['RSI']:.2f}")
-                if 'MACD' in latest and 'MACD_Signal' in latest:
-                    print(f"Latest MACD: {latest['MACD']:.4f} | MACD Signal: {latest['MACD_Signal']:.4f}")
 
                 # Generate trading signals using three strategies
                 df = engine.generate_signals_strategy1(df)
