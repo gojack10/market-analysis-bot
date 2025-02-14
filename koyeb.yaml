@@ -1,0 +1,15 @@
+name: market-analysis-bot
+service:
+  app:
+    instance_type: nano
+    ports:
+      - port: 8000
+        protocol: http
+    dockerfile: Dockerfile
+    env:
+      - name: PORT
+        value: "8000"
+    scale:
+      horizontal:
+        min: 1
+        max: 1 
