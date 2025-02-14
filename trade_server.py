@@ -16,18 +16,46 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 def handle_new_trade(data):
     """Handle new trade broadcasts."""
     try:
-        # Build message including the ticker so that it logs as: 
-        # "jack NEW TRADE - NVDA CALL 2-14 @ 205"
         message = (
             f"{data.get('username', 'unknown')} NEW TRADE - "
             f"{data.get('ticker', 'unknown')} {data.get('tradeType', '')} "
             f"{data.get('expDate', '')} @ {data.get('strikePrice', '')}"
         )
+        if 'tradeNumber' in data:
+            message += f" [trade #{data['tradeNumber']}]"
         print(message)  # Log to server console
         emit("new_trade", message, broadcast=True)  # Broadcast to all connected clients
     except Exception as e:
         print(f"Error handling trade: {e}")
         emit("new_trade", "ERROR: Failed to process trade.")
+
+@socketio.on("close_trade")
+def handle_close_trade(data):
+    """Handle trade close events."""
+    try:
+        message = (
+            f"{data.get('username', 'unknown')} TRADE CLOSED - "
+            f"{data.get('ticker', 'unknown')} {data.get('tradeType', '')} "
+            f"{data.get('expDate', '')} @ {data.get('strikePrice', '')}"
+        )
+        if 'tradeNumber' in data:
+            message += f" [trade #{data['tradeNumber']}]"
+        print(message)
+        emit("close_trade", message, broadcast=True)
+    except Exception as e:
+        print(f"Error handling close trade: {e}")
+        emit("close_trade", "ERROR: Failed to process close trade.")
+
+@socketio.on("debug_log")
+def handle_debug_log(data):
+    """Handle debug log events."""
+    try:
+        message = data.get('message', '')
+        print(message)
+        emit("debug_log", message, broadcast=True)
+    except Exception as e:
+        print(f"Error handling debug log: {e}")
+        emit("debug_log", "ERROR: Failed to process debug log.")
 
 @socketio.on('connect')
 def handle_connect():

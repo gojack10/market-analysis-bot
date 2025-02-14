@@ -12,44 +12,25 @@ sio = socketio.Client()
 # Get server URL from environment variable
 TRADE_SERVER_URL = os.getenv('TRADE_SERVER_URL', 'http://localhost:8000')
 
-def log_trade(ticker):
+
+def log_trade(ticker, trade_type, exp_date, strike_price, trade_number):
     """
-    Logs a new trade for the selected ticker.
-    Prompts the user for trade type, expiration date, and strike price.
-    Emits the trade event and returns the trade details if successful.
+    Logs a new trade for the selected ticker and trade type.
+    Emits the trade event with provided parameters.
     """
     try:
-        # Connect to the server with explicit transport setting
         sio.connect(TRADE_SERVER_URL, transports=['websocket'])
         
-        print("\n=== Trade Logger ===")
-        print(f"Connecting to: {TRADE_SERVER_URL}")
-        # Log the ticker selection after connection
-        print(f"Selected Ticker: {ticker}")
-        
-        trade_type = input("Enter trade type (call/put): ").strip().upper()
-        exp_date = input("Enter expiration date (e.g., 2-14): ").strip()
-        strike_price = input("Enter strike price: ").strip()
-        
-        # Validate inputs
-        if not all([trade_type, exp_date, strike_price]):
-            print("Error: All fields are required!")
-            return None
-        
-        if trade_type not in ['CALL', 'PUT']:
-            print("Error: Trade type must be either 'call' or 'put'!")
-            return None
-            
         trade = {
             'ticker': ticker,
             'username': os.getenv('USERNAME', 'unknown'),
             'tradeType': trade_type,
             'expDate': exp_date,
             'strikePrice': strike_price,
-            'status': 'open'
+            'status': 'open',
+            'tradeNumber': trade_number
         }
         
-        # Emit the new trade event
         sio.emit('new_trade', trade)
         
         print(f"\nTrade logged successfully!")
@@ -57,20 +38,19 @@ def log_trade(ticker):
         print(f"Type: {trade_type}")
         print(f"Expiration: {exp_date}")
         print(f"Strike: {strike_price}")
+        print(f"[trade #{trade_number}]")
         
-        # Delay to ensure event propagation before disconnecting
         time.sleep(1)
-        
         return trade
         
     except Exception as e:
         print(f"Error connecting to {TRADE_SERVER_URL}: {e}")
         print("Make sure the trade server is running and the TRADE_SERVER_URL is correct")
         return None
-    
     finally:
         if sio.connected:
             sio.disconnect()
+
 
 def close_trade(trade):
     """
@@ -88,21 +68,23 @@ def close_trade(trade):
         print(f"Type: {trade['tradeType']}")
         print(f"Expiration: {trade['expDate']}")
         print(f"Strike: {trade['strikePrice']}")
+        if 'tradeNumber' in trade:
+            print(f"[trade #{trade['tradeNumber']}]")
         
         time.sleep(1)
-        
     except Exception as e:
         print(f"Error closing trade: {e}")
     finally:
         if sio.connected:
             sio.disconnect()
 
+
 def debug_clear_memory(trade_memory):
     """
     Clears the trade memory list and emits a debug log event with a descriptive message.
     """
     trade_memory.clear()
-    debug_message = "[DEBUG] Trade list memory cleared. All trade logs removed."
+    debug_message = "[DEBUG] Trade list memory cleared."
     print(debug_message)
     try:
         sio.connect(TRADE_SERVER_URL, transports=['websocket'])
@@ -113,6 +95,7 @@ def debug_clear_memory(trade_memory):
     finally:
         if sio.connected:
             sio.disconnect()
+
 
 def select_ticker():
     """
@@ -133,20 +116,57 @@ def select_ticker():
             print("Invalid selection. Please enter 1 or 2.")
     return ticker
 
+
+def select_trade_type():
+    """
+    Prompts the user to select a trade type using number 1 or 2.
+    Returns 'CALL' or 'PUT'.
+    """
+    trade_type = None
+    while trade_type is None:
+        print("\nSelect Trade Type:")
+        print("1. CALL")
+        print("2. PUT")
+        choice = input("Enter your choice (1 or 2): ").strip()
+        if choice == "1":
+            trade_type = "CALL"
+        elif choice == "2":
+            trade_type = "PUT"
+        else:
+            print("Invalid selection. Please enter 1 or 2.")
+    return trade_type
+
+
 def main():
     trade_memory = []  # Memory to store trades in progress
+    trade_counter = 1  # Global trade counter
+    
+    # Print header and connection info BEFORE ticker selection.
+    print("\n=== Trade Logger ===")
+    print(f"Connecting to: {TRADE_SERVER_URL}")
     
     while True:
         if not trade_memory:
-            print("\nNo trades in progress.")
+            # No trades in progress; get new trade details.
             ticker = select_ticker()
-            trade = log_trade(ticker)
+            trade_type = select_trade_type()
+            exp_date = input("Enter expiration date (e.g., 2-14): ").strip()
+            strike_price = input("Enter strike price: ").strip()
+            
+            if not all([exp_date, strike_price]):
+                print("Error: All fields are required!")
+                continue
+            
+            trade = log_trade(ticker, trade_type, exp_date, strike_price, trade_counter)
             if trade:
                 trade_memory.append(trade)
+                trade_counter += 1
         else:
             print("\nCurrent Trades in Memory:")
             for idx, trade in enumerate(trade_memory, start=1):
-                print(f"{idx}. Ticker: {trade['ticker']}, Type: {trade['tradeType']}, Exp: {trade['expDate']}, Strike: {trade['strikePrice']}, Status: {trade['status']}")
+                print(f"{idx}. Ticker: {trade['ticker']}, Type: {trade['tradeType']}, "
+                      f"Exp: {trade['expDate']}, Strike: {trade['strikePrice']}, "
+                      f"Status: {trade['status']} [trade #{trade.get('tradeNumber', '?')}]")
             
             print("\nOptions:")
             print("1. Open New Trade")
@@ -156,9 +176,18 @@ def main():
             
             if option == "1":
                 ticker = select_ticker()
-                trade = log_trade(ticker)
+                trade_type = select_trade_type()
+                exp_date = input("Enter expiration date (e.g., 2-14): ").strip()
+                strike_price = input("Enter strike price: ").strip()
+                
+                if not all([exp_date, strike_price]):
+                    print("Error: All fields are required!")
+                    continue
+                
+                trade = log_trade(ticker, trade_type, exp_date, strike_price, trade_counter)
                 if trade:
                     trade_memory.append(trade)
+                    trade_counter += 1
             elif option == "2":
                 if not trade_memory:
                     print("No open trades to close.")
