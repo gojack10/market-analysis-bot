@@ -37,7 +37,7 @@ def play_signal_sound(symbol, signal_type):
 
 # Alpha Vantage API Configuration
 API_KEY = 'F2B18RC451038ETB'
-SYMBOLS = ['NVDA', 'AAPL']
+SYMBOLS = ['NVDA', 'AAPL', 'TSLA']
 INTERVAL = '5min'
 URL_TEMPLATE = "https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol={symbol}&interval={interval}&entitlement=realtime&apikey={api_key}"
 
@@ -143,26 +143,27 @@ class RealtimeStrategyEngine:
             df['Buy_Strategy3'] = (df['Signal_VWAP'] == 1) & (df['Signal_OBV'] == 1) & (df['Signal_Fib'] == 1)
             df['Sell_Strategy3'] = (df['Signal_VWAP'] == -1) & (df['Signal_OBV'] == -1) & (df['Signal_Fib'] == 1)
         return df
+    
+    def generate_signals_strategy4(self, df):
+        """New strategy method"""
+        if all(col in df.columns for col in ['RSI', 'MACD', 'MACD_Signal', 'OBV']):
+            df['Signal_RSI'] = np.where(df['RSI'] < 35, 1, np.where(df['RSI'] > 65, -1, 0))
+            df['Signal_MACD'] = np.where(df['MACD'] > df['MACD_Signal'], 1, -1)
+            df['Signal_OBV'] = np.where(df['OBV'] < df['RSI'], 1, 0)
 
-def get_user_ticker():
-    """Get user input for ticker selection"""
-    while True:
-        ticker = input("Enter ticker (NVDA or AAPL): ").upper()
-        if ticker in ['NVDA', 'AAPL']:
-            return [ticker]  # Return as a list for compatibility
-        print("Invalid ticker. Please enter either NVDA or AAPL.")
+            df['Buy_Strategy4'] = (df['Signal_RSI'] == 1) & (df['Signal_MACD'] == 1) & (df['Signal_OBV'] == 1)
+            df['Sell_Strategy4'] = (df['Signal_RSI'] == -1) & (df['Signal_MACD'] == -1) & (df['Signal_OBV'] == 1)
+        return df
 
 def main():
-    """Main loop with descriptive market update messages and corrected timezone handling"""
+    """Updated main function"""
     Thread(target=play_theme_loop, daemon=True).start()
     engine = RealtimeStrategyEngine()
     
-    # Get user input for ticker
-    symbols = get_user_ticker()
-    print(f"\nStarting analysis for {symbols[0]}...")
+    print("\nStarting analysis for all symbols...")
     
     while True:
-        for symbol in symbols:  # Using the user-selected ticker
+        for symbol in SYMBOLS:
             df = fetch_realtime_data(symbol)
             if df is not None and len(df) > 20:
                 # Ensure the DataFrame is sorted by time
@@ -181,13 +182,14 @@ def main():
                 print(f"Timestamp: {timestamp}")
                 print(f"Data points received: {len(df)}")
 
-                # Generate trading signals using three strategies
+                # Generate trading signals using all four strategies
                 df = engine.generate_signals_strategy1(df)
                 df = engine.generate_signals_strategy2(df)
                 df = engine.generate_signals_strategy3(df)
+                df = engine.generate_signals_strategy4(df)
                 
                 # Check for buy or sell signals and play the corresponding audio
-                for strategy in [1, 2, 3]:
+                for strategy in [1, 2, 3, 4]:
                     buy_signal = df.iloc[-1].get(f'Buy_Strategy{strategy}', False)
                     sell_signal = df.iloc[-1].get(f'Sell_Strategy{strategy}', False)
                     

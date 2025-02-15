@@ -43,7 +43,8 @@ STYLES = {
 
 # Log buffers for terminal display
 log_buffer = deque(maxlen=100)
-trade_buffer = deque(maxlen=100)
+# Enforce rotation after 4 trades, so the 5th pushes out the oldest
+trade_buffer = deque(maxlen=4)
 log_lock = Lock()
 trade_lock = Lock()
 
@@ -95,6 +96,37 @@ def on_new_trade(message):
     print("================================")
     
     with trade_lock:
+        trade_buffer.append({
+            'timestamp': datetime.now(),
+            'message': message
+        })
+
+@sio.on('close_trade')
+def on_close_trade(message):
+    """Handle trade close messages"""
+    print("\n=== Socket.IO Close Trade Event ===")
+    print(f"Received close trade at {datetime.now().strftime('%H:%M:%S')}:")
+    print(f"Message content: {message}")
+    print("==================================")
+    
+    with trade_lock:
+        trade_buffer.append({
+            'timestamp': datetime.now(),
+            'message': message
+        })
+
+@sio.on('debug_log')
+def on_debug_log(message):
+    """Handle debug log messages"""
+    print("\n=== Socket.IO Debug Log Event ===")
+    print(f"Received debug log at {datetime.now().strftime('%H:%M:%S')}:")
+    print(f"Message content: {message}")
+    print("=================================")
+    
+    with trade_lock:
+        # Look for the trigger text anywhere in the message.
+        if "Trade list memory cleared" in message:
+            trade_buffer.clear()
         trade_buffer.append({
             'timestamp': datetime.now(),
             'message': message
@@ -220,6 +252,7 @@ def generate_signals(signal_data: list) -> Panel:
     table.add_column("Strategy", style="yellow")
     table.add_column("Signal", justify="right")
     
+    # Show the last 6 signal entries
     for entry in signal_data[-6:]:
         time_str = datetime.fromtimestamp(entry.created).strftime('%H:%M:%S')
         log_message = entry.getMessage()
@@ -260,17 +293,16 @@ def generate_logs() -> Panel:
     return Panel(text, title="Event Log", style="bright_white")
 
 def generate_trade_log() -> Panel:
-    """Generate trade log panel with added debug output"""
+    """
+    Generate trade log panel with a maximum of 4 trades.
+    Each trade prints two lines (timestamp + message) => 8 lines max.
+    """
     text = Text()
     with trade_lock:
-        # Debug: Show the number of trades received
-        debug_line = f"DEBUG: trade_buffer length: {len(trade_buffer)}\n"
-        text.append(debug_line, style="bold red")
-        
         if not trade_buffer:
             text.append("No trades received yet.\n", style="italic yellow")
         
-        # List each trade in the buffer
+        # The deque itself is maxlen=4, so only 4 trades will ever be stored
         for trade in trade_buffer:
             time_str = trade['timestamp'].strftime("%H:%M:%S")
             text.append(f"[{time_str}] ", style=STYLES["timestamp"])
@@ -280,6 +312,7 @@ def generate_trade_log() -> Panel:
 
 def main():
     """Main execution with rich interface"""
+    # Start any background music or theme if needed
     Thread(target=play_theme_loop, daemon=True).start()
     
     layout = create_layout()
