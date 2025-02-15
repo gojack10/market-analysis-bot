@@ -1,5 +1,3 @@
-# trade_gui.py
-
 import upgrade3
 from upgrade3 import *
 from rich.console import Console
@@ -45,8 +43,10 @@ STYLES = {
 log_buffer = deque(maxlen=100)
 # Enforce rotation after 4 trades, so the 5th pushes out the oldest
 trade_buffer = deque(maxlen=4)
+ml_buffer = deque(maxlen=50)
 log_lock = Lock()
 trade_lock = Lock()
+ml_lock = Lock()
 
 # Initialize Socket.IO client
 sio = socketio.Client()
@@ -114,7 +114,6 @@ def on_close_trade(message):
             'timestamp': datetime.now(),
             'message': message
         })
-
 @sio.on('debug_log')
 def on_debug_log(message):
     """Handle debug log messages"""
@@ -162,52 +161,72 @@ logging.basicConfig(
 )
 
 class EnhancedStrategyEngine(upgrade3.RealtimeStrategyEngine):
-    """Extended strategy engine with rich logging"""
-    
+    """Extended strategy engine with rich logging and sound alerts"""
+
     def generate_signals_strategy1(self, df, symbol):
         df = super().generate_signals_strategy1(df)
         latest = df.iloc[-1]
         if latest.get('Buy_Strategy1', False):
             logging.info(f"[STRAT1] {symbol} BUY CALL - {latest.name.strftime('%H:%M:%S')}")
+            pygame.mixer.Channel(1).play(pygame.mixer.Sound(upgrade3.CALL_SOUND))
         elif latest.get('Sell_Strategy1', False):
             logging.info(f"[STRAT1] {symbol} BUY PUT - {latest.name.strftime('%H:%M:%S')}")
+            pygame.mixer.Channel(1).play(pygame.mixer.Sound(upgrade3.PUT_SOUND))
         else:
             logging.info(f"[STRAT1] {symbol} NO TRADE - {latest.name.strftime('%H:%M:%S')}")
         return df
-    
+
     def generate_signals_strategy2(self, df, symbol):
         df = super().generate_signals_strategy2(df)
         latest = df.iloc[-1]
         if latest.get('Buy_Strategy2', False):
             logging.info(f"[STRAT2] {symbol} BUY CALL - {latest.name.strftime('%H:%M:%S')}")
+            pygame.mixer.Channel(1).play(pygame.mixer.Sound(upgrade3.CALL_SOUND))
         elif latest.get('Sell_Strategy2', False):
             logging.info(f"[STRAT2] {symbol} BUY PUT - {latest.name.strftime('%H:%M:%S')}")
+            pygame.mixer.Channel(1).play(pygame.mixer.Sound(upgrade3.PUT_SOUND))
         else:
             logging.info(f"[STRAT2] {symbol} NO TRADE - {latest.name.strftime('%H:%M:%S')}")
         return df
-    
+
     def generate_signals_strategy3(self, df, symbol):
         df = super().generate_signals_strategy3(df)
         latest = df.iloc[-1]
         if latest.get('Buy_Strategy3', False):
             logging.info(f"[STRAT3] {symbol} BUY CALL - {latest.name.strftime('%H:%M:%S')}")
+            pygame.mixer.Channel(1).play(pygame.mixer.Sound(upgrade3.CALL_SOUND))
         elif latest.get('Sell_Strategy3', False):
             logging.info(f"[STRAT3] {symbol} BUY PUT - {latest.name.strftime('%H:%M:%S')}")
+            pygame.mixer.Channel(1).play(pygame.mixer.Sound(upgrade3.PUT_SOUND))
         else:
             logging.info(f"[STRAT3] {symbol} NO TRADE - {latest.name.strftime('%H:%M:%S')}")
         return df
 
+    def generate_signals_strategy4(self, df, symbol):
+        df = super().generate_signals_strategy4(df)
+        latest = df.iloc[-1]
+        if latest.get('Buy_Strategy4', False):
+            logging.info(f"[STRAT4] {symbol} BUY CALL - {latest.name.strftime('%H:%M:%S')}")
+            pygame.mixer.Channel(1).play(pygame.mixer.Sound(upgrade3.CALL_SOUND))
+        elif latest.get('Sell_Strategy4', False):
+            logging.info(f"[STRAT4] {symbol} BUY PUT - {latest.name.strftime('%H:%M:%S')}")
+            pygame.mixer.Channel(1).play(pygame.mixer.Sound(upgrade3.PUT_SOUND))
+        else:
+            logging.info(f"[STRAT4] {symbol} NO TRADE - {latest.name.strftime('%H:%M:%S')}")
+        return df
+
 def create_layout():
-    """Create terminal layout structure"""
+    """Create terminal layout structure with ML predictions column"""
     layout = Layout()
     layout.split(
         Layout(name="header", size=3),
         Layout(name="main", ratio=1),
-        Layout(name="logs", size=10)
+        Layout(name="ml_predictions", size=10),
+        Layout(name="logs", size=10),
     )
     layout["main"].split_row(
         Layout(name="status", ratio=2),
-        Layout(name="signals", ratio=3)
+        Layout(name="signals", ratio=3),
     )
     layout["logs"].split_row(
         Layout(name="event_log", ratio=1),
@@ -215,10 +234,39 @@ def create_layout():
     )
     return layout
 
+def generate_ml_predictions() -> Panel:
+    """Generate panel for machine learning trend predictions"""
+    table = Table(
+        title="ML Trend Analysis",
+        show_header=True,
+        header_style="bold green",
+        expand=True
+    )
+    table.add_column("Time", style="cyan")
+    table.add_column("Symbol", style="bright_cyan")
+    table.add_column("Prediction", justify="right")
+    
+    with ml_lock:
+        for entry in list(ml_buffer)[-3:]:
+            time_str = entry['timestamp']
+            symbol = entry['symbol']
+            trend = entry['trend']
+            trend_style = STYLES["call"] if trend == "UPWARD" else STYLES["put"]
+            
+            table.add_row(
+                Text(time_str, style=STYLES["timestamp"]),
+                Text(symbol, style="bright_cyan"),
+                Text(trend, style=trend_style)
+            )
+    
+    return Panel(table, style="bright_white")
+
 def generate_header() -> Panel:
     """Generate top header panel"""
     title = Text(" ALGO TRADING BOT v3.0 ", style="white on blue bold")
     return Panel(title, style="blue")
+
+
 
 def generate_status(symbol_data: dict) -> Panel:
     """Generate status panel with market data"""
@@ -235,7 +283,7 @@ def generate_status(symbol_data: dict) -> Panel:
         table.add_row("VWAP", f"{data['vwap']:.2f}")
         table.add_row("Bollinger", f"{data['bollinger']}")
         table.add_row("Fib Level", data['fib_level'], end_section=True)
-    
+        
     return Panel(table, title="Market Data", subtitle="Realtime Stats", style="bright_white")
 
 def generate_signals(signal_data: list) -> Panel:
@@ -252,8 +300,7 @@ def generate_signals(signal_data: list) -> Panel:
     table.add_column("Strategy", style="yellow")
     table.add_column("Signal", justify="right")
     
-    # Show the last 6 signal entries
-    for entry in signal_data[-6:]:
+    for entry in signal_data[-12:]:
         time_str = datetime.fromtimestamp(entry.created).strftime('%H:%M:%S')
         log_message = entry.getMessage()
         
@@ -311,12 +358,12 @@ def generate_trade_log() -> Panel:
     return Panel(text, title="Trade Log", style="bright_white")
 
 def main():
-    """Main execution with rich interface"""
-    # Start any background music or theme if needed
-    Thread(target=play_theme_loop, daemon=True).start()
+    """Main execution with rich interface and ML integration"""
+    Thread(target=upgrade3.play_theme_loop, daemon=True).start()
     
     layout = create_layout()
     engine = EnhancedStrategyEngine()
+    ml_model = upgrade3.MachineLearningModel()
     symbol_data = {}
     
     with Live(layout, refresh_per_second=10, screen=True):
@@ -332,6 +379,7 @@ def main():
                     df = engine.generate_signals_strategy1(df, symbol)
                     df = engine.generate_signals_strategy2(df, symbol)
                     df = engine.generate_signals_strategy3(df, symbol)
+                    df = engine.generate_signals_strategy4(df, symbol)
                     
                     latest = df.iloc[-1]
                     symbol_data[symbol] = {
@@ -344,9 +392,26 @@ def main():
                         'bollinger': f"{latest.get('Bollinger_Lower', 0):.2f}-{latest.get('Bollinger_Upper', 0):.2f}",
                         'fib_level': f"38.2%: {latest.get('Fib_38_2', 0):.2f} | 61.8%: {latest.get('Fib_61_8', 0):.2f}"
                     }
+
+                    # ML Prediction processing
+                    csv_file = f"{symbol}1.csv"
+                    latest_data = [latest[feature] for feature in ml_model.features]
+                    prediction = ml_model.predict_trend(csv_file, latest_data)
+                    
+                    if prediction is not None:
+                        trend = 'UPWARD' if prediction[0] == 1 else 'DOWNWARD'
+                        timestamp = latest.name.strftime('%H:%M:%S')
+                        with ml_lock:
+                            ml_buffer.append({
+                                'timestamp': timestamp,
+                                'symbol': symbol,
+                                'trend': trend
+                            })
             
             layout["status"].update(generate_status(symbol_data))
             layout["signals"].update(generate_signals(list(log_buffer)))
+            layout["ml_predictions"].update(generate_ml_predictions())
+            layout["logs"].update(generate_logs())
             layout["event_log"].update(generate_logs())
             layout["trade_log"].update(generate_trade_log())
             
@@ -359,8 +424,4 @@ if __name__ == "__main__":
         import subprocess
         subprocess.run(["pip", "install", "rich"])
     
-    try:
-        main()
-    finally:
-        if sio.connected:
-            sio.disconnect()
+    main()
