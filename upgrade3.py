@@ -8,6 +8,8 @@ from threading import Thread
 from datetime import datetime
 from pytz import timezone
 import talib as ta
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
 
 # Audio Configuration
 THEME_SOUND = 'themebot.mp3'
@@ -17,6 +19,79 @@ PUT_SOUND = 'PUTS.mp3'
 # Initialize pygame mixer
 pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
 pygame.mixer.set_num_channels(2)
+
+class MachineLearningModel:
+    """Machine learning model for trend prediction on AAPL1, NVDA1, and TSLA1 CSV files."""
+    
+    def __init__(self):
+        """Initialize the model for specific CSV files."""
+        self.models = {}  # Store separate models per CSV file
+        self.features = ['RSI', 'MACD', 'Bollinger_Upper', 'Bollinger_Lower', 'EMA_8', 'VWAP', 'OBV', 'Fib_38_2', 'Fib_61_8']
+        self.csv_files = ["AAPL1.csv", "NVDA1.csv", "TSLA1.csv"]
+        
+        for csv_file in self.csv_files:
+            model_filename = f"model_{os.path.basename(csv_file).replace('.csv', '.pkl')}"
+            if os.path.exists(model_filename):
+                print(f"Loading existing model for {csv_file}...")
+                self.models[csv_file] = joblib.load(model_filename)
+            else:
+                print(f"Processing {csv_file}...")
+                df = self.load_and_preprocess_data(csv_file)
+                self.train_model(csv_file, df)
+    
+    def load_and_preprocess_data(self, file_path):
+        """Load and preprocess data from CSV file."""
+        df = pd.read_csv(file_path, parse_dates=["Unnamed: 0"])
+        df.rename(columns={"Unnamed: 0": "timestamp"}, inplace=True)
+        df.set_index("timestamp", inplace=True)
+        
+        # Compute indicators
+        df['RSI'] = ta.RSI(df['4. close'], timeperiod=14)
+        df['MACD'], df['MACD_Signal'], _ = ta.MACD(df['4. close'])
+        df['Bollinger_Upper'], _, df['Bollinger_Lower'] = ta.BBANDS(df['4. close'])
+        df['EMA_8'] = ta.EMA(df['4. close'], timeperiod=8)
+        df['VWAP'] = (df['4. close'] * df['5. volume']).cumsum() / df['5. volume'].cumsum()
+        df['OBV'] = ta.OBV(df['4. close'], df['5. volume'])
+        
+        # Fibonacci levels (computed from high/low range)
+        high = df['2. high'].rolling(window=14).max()
+        low = df['3. low'].rolling(window=14).min()
+        df['Fib_38_2'] = low + (high - low) * 0.382
+        df['Fib_61_8'] = low + (high - low) * 0.618
+        
+        df.dropna(inplace=True)
+        return df
+    
+    def train_model(self, file_path, df):
+        """Train an ML model and save it separately for each CSV file."""
+        print(f"Training model for {file_path}...")
+        
+        # Define features and target labels
+        X = df[self.features]
+        y = np.where(df['4. close'].shift(-1) > df['4. close'], 1, 0)  # Binary classification: Up (1) or Down (0)
+
+        # Train-test split
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        
+        # Train RandomForest model
+        model = RandomForestClassifier(n_estimators=100, random_state=42)
+        model.fit(X_train, y_train)
+        
+        # Save the trained model with a unique name per CSV file
+        model_filename = f"model_{os.path.basename(file_path).replace('.csv', '.pkl')}"
+        joblib.dump(model, model_filename)
+        self.models[file_path] = model
+        print(f"Model trained and saved as {model_filename}")
+
+    def predict_trend(self, file_path, latest_data):
+        """Predict the trend using the trained model for the specified file."""
+        if file_path not in self.models:
+            print(f"No model found for {file_path}. Train the model first.")
+            return None
+        
+        model = self.models[file_path]
+        latest_df = pd.DataFrame([latest_data], columns=self.features)
+        return model.predict(latest_df)
 
 def play_theme_loop():
     """Play theme music continuously in a separate thread"""
@@ -156,48 +231,48 @@ class RealtimeStrategyEngine:
         return df
 
 def main():
-    """Updated main function"""
+    """Main loop with ML integration"""
     Thread(target=play_theme_loop, daemon=True).start()
     engine = RealtimeStrategyEngine()
-    
-    print("\nStarting analysis for all symbols...")
+    ml_model = MachineLearningModel()
     
     while True:
         for symbol in SYMBOLS:
             df = fetch_realtime_data(symbol)
             if df is not None and len(df) > 20:
-                # Ensure the DataFrame is sorted by time
-                df = df.sort_index()
-
-                # Calculate technical indicators and Fibonacci levels
                 df = calculate_indicators(df)
                 df = calculate_fibonacci_levels(df)
+                df = df.sort_index()
                 
-                # Get the latest data point
-                latest = df.iloc[-1]
-                timestamp = latest.name.strftime('%Y-%m-%d %H:%M:%S')
-                
-                # Print a more descriptive market update message
-                print(f"\n=== Market Update for {symbol} ===")
-                print(f"Timestamp: {timestamp}")
-                print(f"Data points received: {len(df)}")
-
-                # Generate trading signals using all four strategies
+                # Existing strategy signals
                 df = engine.generate_signals_strategy1(df)
                 df = engine.generate_signals_strategy2(df)
                 df = engine.generate_signals_strategy3(df)
                 df = engine.generate_signals_strategy4(df)
                 
-                # Check for buy or sell signals and play the corresponding audio
+                # ML Prediction for all symbols
+                latest_row = df.iloc[-1]
+                latest_data = [latest_row[feature] for feature in ml_model.features]
+                
+                # Get corresponding model file
+                csv_file = f"{symbol}1.csv"
+                prediction = ml_model.predict_trend(csv_file, latest_data)
+                
+                if prediction is not None:
+                    trend = 'UPWARD' if prediction == 1 else 'DOWNWARD'
+                    print(f"{symbol} - ML Prediction: {trend} Trend Detected")
+                    # Removed play_signal_sound call to prevent ML-based signals
+                
+                # Process strategy signals
+                timestamp = df.index[-1].strftime('%Y-%m-%d %H:%M:%S')
+                print(f"\n=== {symbol} Market Update @ {timestamp} ===")
+                
                 for strategy in [1, 2, 3, 4]:
-                    buy_signal = df.iloc[-1].get(f'Buy_Strategy{strategy}', False)
-                    sell_signal = df.iloc[-1].get(f'Sell_Strategy{strategy}', False)
-                    
-                    if buy_signal:
-                        print(f"{symbol} - STRATEGY {strategy}: BUY CALLS")
+                    if df.iloc[-1].get(f'Buy_Strategy{strategy}', False):
+                        print(f"STRATEGY {strategy}: BUY CALLS")
                         play_signal_sound(symbol, 'call')
-                    if sell_signal:
-                        print(f"{symbol} - STRATEGY {strategy}: BUY PUTS")
+                    if df.iloc[-1].get(f'Sell_Strategy{strategy}', False):
+                        print(f"STRATEGY {strategy}: BUY PUTS")
                         play_signal_sound(symbol, 'put')
         
         time.sleep(5)
