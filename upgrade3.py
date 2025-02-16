@@ -10,6 +10,7 @@ from pytz import timezone
 import talib as ta
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
+from scipy import stats
 
 # Audio Configuration
 THEME_SOUND = 'themebot.mp3'
@@ -21,74 +22,141 @@ pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
 pygame.mixer.set_num_channels(2)
 
 class MachineLearningModel:
-    """Machine learning model for trend prediction on AAPL1, NVDA1, and TSLA1 CSV files."""
+    """Enhanced ML model with training/live data comparison"""
     
     def __init__(self):
-        """Initialize the model for specific CSV files."""
-        self.models = {}  # Store separate models per CSV file
-        self.features = ['RSI', 'MACD', 'Bollinger_Upper', 'Bollinger_Lower', 'EMA_8', 'VWAP', 'OBV', 'Fib_38_2', 'Fib_61_8']
+        self.models = {}
+        self.training_stats = {}  # Stores feature statistics
+        self.features = ['RSI', 'MACD', 'Bollinger_Upper', 'Bollinger_Lower', 
+                        'EMA_8', 'VWAP', 'OBV', 'Fib_38_2', 'Fib_61_8']
         self.csv_files = ["AAPL1.csv", "NVDA1.csv", "TSLA1.csv"]
         
         for csv_file in self.csv_files:
             model_filename = f"model_{os.path.basename(csv_file).replace('.csv', '.pkl')}"
             if os.path.exists(model_filename):
                 print(f"Loading existing model for {csv_file}...")
-                self.models[csv_file] = joblib.load(model_filename)
+                try:
+                    loaded = joblib.load(model_filename)
+                    
+                    # Check if loaded model has proper format
+                    if isinstance(loaded, dict) and 'model' in loaded and 'stats' in loaded:
+                        self.models[csv_file] = loaded['model']
+                        self.training_stats[csv_file] = loaded['stats']
+                        print(f"Successfully loaded new format model for {csv_file}")
+                    else:
+                        # Handle old model format by retraining
+                        print(f"⚠️ Old model format detected for {csv_file}, retraining...")
+                        df = self.load_and_preprocess_data(csv_file)
+                        self.train_model(csv_file, df)
+                except Exception as e:
+                    print(f"Error loading model {csv_file}: {e}, retraining...")
+                    df = self.load_and_preprocess_data(csv_file)
+                    self.train_model(csv_file, df)
             else:
                 print(f"Processing {csv_file}...")
                 df = self.load_and_preprocess_data(csv_file)
                 self.train_model(csv_file, df)
-    
-    def load_and_preprocess_data(self, file_path):
-        """Load and preprocess data from CSV file."""
-        df = pd.read_csv(file_path, parse_dates=["Unnamed: 0"])
-        df.rename(columns={"Unnamed: 0": "timestamp"}, inplace=True)
-        df.set_index("timestamp", inplace=True)
-        
-        # Compute indicators
-        df['RSI'] = ta.RSI(df['4. close'], timeperiod=14)
-        df['MACD'], df['MACD_Signal'], _ = ta.MACD(df['4. close'])
-        df['Bollinger_Upper'], _, df['Bollinger_Lower'] = ta.BBANDS(df['4. close'])
-        df['EMA_8'] = ta.EMA(df['4. close'], timeperiod=8)
-        df['VWAP'] = (df['4. close'] * df['5. volume']).cumsum() / df['5. volume'].cumsum()
-        df['OBV'] = ta.OBV(df['4. close'], df['5. volume'])
-        
-        # Fibonacci levels (computed from high/low range)
-        high = df['2. high'].rolling(window=14).max()
-        low = df['3. low'].rolling(window=14).min()
-        df['Fib_38_2'] = low + (high - low) * 0.382
-        df['Fib_61_8'] = low + (high - low) * 0.618
-        
-        df.dropna(inplace=True)
-        return df
-    
-    def train_model(self, file_path, df):
-        """Train an ML model and save it separately for each CSV file."""
-        print(f"Training model for {file_path}...")
-        
-        # Define features and target labels
-        X = df[self.features]
-        y = np.where(df['4. close'].shift(-1) > df['4. close'], 1, 0)  # Binary classification: Up (1) or Down (0)
 
-        # Train-test split
+    def load_and_preprocess_data(self, csv_file):
+        """Load and preprocess CSV data for model training"""
+        try:
+            df = pd.read_csv(csv_file)
+            
+            # Clean column names (assuming Alpha Vantage format)
+            df = df.rename(columns={
+                "1. open": "open",
+                "2. high": "high",
+                "3. low": "low",
+                "4. close": "close",
+                "5. volume": "volume"
+            })
+            
+            # Convert index to datetime
+            df.index = pd.to_datetime(df.index)
+            
+            # Calculate technical indicators
+            df = calculate_indicators(df)
+            
+            # Calculate Fibonacci levels
+            df = calculate_fibonacci_levels(df)
+            
+            return df.dropna()
+        except Exception as e:
+            print(f"Error loading/preprocessing {csv_file}: {e}")
+            raise
+
+    def train_model(self, file_path, df):
+        """Enhanced training with statistical preservation"""
+        X = df[self.features]
+        y = np.where(df['close'].shift(-1) > df['close'], 1, 0)  # Changed '4. close' to 'close'
+
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-        
-        # Train RandomForest model
+    
         model = RandomForestClassifier(n_estimators=100, random_state=42)
         model.fit(X_train, y_train)
-        
-        # Save the trained model with a unique name per CSV file
+
+    # Calculate and store training statistics
+        train_stats = {
+            'means': X_train.mean().to_dict(),
+            'stds': X_train.std().to_dict(),
+            'kde': {feature: stats.gaussian_kde(X_train[feature]) for feature in self.features}
+        }
+    
         model_filename = f"model_{os.path.basename(file_path).replace('.csv', '.pkl')}"
-        joblib.dump(model, model_filename)
+        joblib.dump({'model': model, 'stats': train_stats}, model_filename)
         self.models[file_path] = model
-        print(f"Model trained and saved as {model_filename}")
+        self.training_stats[file_path] = train_stats
+        print(f"Model and stats saved for {file_path}")
+
+    def compare_live_data(self, file_path, live_features):
+        """Compare live data against training distribution"""
+        stats = self.training_stats.get(file_path)
+        if not stats:
+            print("No training statistics available")
+            return None
+
+        report = {
+            'z_scores': {},
+            'probability_density': {},
+            'anomalies': []
+        }
+
+        for feature in self.features:
+            # Z-score analysis
+            live_value = live_features.get(feature, 0)
+            mean = stats['means'][feature]
+            std = stats['stds'][feature]
+            
+            if std > 0:
+                z = (live_value - mean) / std
+                report['z_scores'][feature] = z
+                if abs(z) > 3:
+                    report['anomalies'].append(feature)
+            
+            # Probability density analysis
+            kde = stats['kde'][feature]
+            report['probability_density'][feature] = kde.integrate_box_1d(live_value-0.01, live_value+0.01)
+
+        return report
 
     def predict_trend(self, file_path, latest_data):
-        """Predict the trend using the trained model for the specified file."""
+        """Enhanced prediction with data validation"""
         if file_path not in self.models:
-            print(f"No model found for {file_path}. Train the model first.")
+            print(f"No model found for {file_path}")
             return None
+
+        # Create feature dictionary
+        live_features = dict(zip(self.features, latest_data))
         
+        # Perform data comparison
+        comparison = self.compare_live_data(file_path, live_features)
+        if comparison:
+            print(f"\nData Validation Report for {file_path}:")
+            print(f"Significant anomalies: {comparison['anomalies'] or 'None'}")
+            for feat in self.features:
+                print(f"{feat}: Z={comparison['z_scores'][feat]:.2f} | PD={comparison['probability_density'][feat]:.4f}")
+
+        # Make prediction
         model = self.models[file_path]
         latest_df = pd.DataFrame([latest_data], columns=self.features)
         return model.predict(latest_df)
@@ -231,7 +299,7 @@ class RealtimeStrategyEngine:
         return df
 
 def main():
-    """Main loop with ML integration"""
+    """Main loop with enhanced ML validation"""
     Thread(target=play_theme_loop, daemon=True).start()
     engine = RealtimeStrategyEngine()
     ml_model = MachineLearningModel()
@@ -253,14 +321,13 @@ def main():
                 # ML Prediction for all symbols
                 latest_row = df.iloc[-1]
                 latest_data = [latest_row[feature] for feature in ml_model.features]
-                
-                # Get corresponding model file
                 csv_file = f"{symbol}1.csv"
+                
                 prediction = ml_model.predict_trend(csv_file, latest_data)
                 
                 if prediction is not None:
                     trend = 'UPWARD' if prediction == 1 else 'DOWNWARD'
-                    print(f"{symbol} - ML Prediction: {trend} Trend Detected")
+                    print(f"\n{symbol} - ML Prediction: {trend} Trend (Validated)")
                     # Removed play_signal_sound call to prevent ML-based signals
                 
                 # Process strategy signals
