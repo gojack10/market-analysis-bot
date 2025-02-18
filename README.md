@@ -293,27 +293,6 @@ If you see the above error, follow these steps:
    - Download and run `vs_BuildTools.exe`.
    - In the installer, **make sure "Desktop development with C++" is checked**, then click **Install**.
    
-2. **Test the Setup:**  
-   After installing, try running:
-   ```powershell
-   python gui3.py
-   ```
-   
-3. **Handling ModuleNotFound Errors:**  
-   After running `uv pip install -r requirements.txt` and then executing:
-   ```powershell
-   python gui3.py
-   ```
-   If you encounter errors such as:
-   
-   ```powershell
-   ModuleNotFoundError: No module named 'joblib'
-   ```
-   Run:
-   ```powershell
-   uv pip install joblib scikit-learn
-   ```
-
 ---
 
 ### **Step 4: Test Your Setup**
