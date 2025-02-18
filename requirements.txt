@@ -14,3 +14,5 @@ bcrypt
 python-dotenv
 python-socketio
 websocket-client
+sckit-learn
+joblib
